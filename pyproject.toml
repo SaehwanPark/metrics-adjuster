@@ -1,0 +1,88 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metrics-adjuster"
+version = "1.0.0"
+description = "Adjusted group-aware clinical prediction metrics with Python API and CLI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-only"
+authors = [
+  { name = "Saehwan Park" },
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Typing :: Typed",
+]
+dependencies = [
+  "matplotlib>=3.10.9",
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pyarrow>=24.0.0",
+  "pydantic>=2.6",
+  "pyyaml>=6.0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.10",
+  "pandas-stubs>=2.1",
+  "pytest>=8.0",
+  "ruff>=0.5",
+  "types-pyyaml>=6.0.12.20260518",
+]
+
+[project.scripts]
+metrics-adjuster = "metrics_adjuster.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SaehwanPark/metrics-adjuster"
+Repository = "https://github.com/SaehwanPark/metrics-adjuster"
+Issues = "https://github.com/SaehwanPark/metrics-adjuster/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/metrics_adjuster"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/metrics_adjuster/**",
+  "tests/**",
+  "scripts/**",
+  "README.md",
+  "QUICKSTART.md",
+  "docs/API_MANUAL.md",
+  "docs/CLI_MANUAL.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "pyproject.toml",
+  "ruff.toml",
+]
+exclude = [
+  ".agents/**",
+  "deployment/**",
+  "docs/artifacts/**",
+  "legacy/**",
+  "results/**",
+  "tests/deployment/**",
+  "**/__pycache__/**",
+  "*.pyc",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]

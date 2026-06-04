@@ -1,0 +1,20 @@
+title: VA CAN 2019 adjusted metrics report
+subtitle: Sampled evaluation on 50,000 rows from all_can_2019_v2_ordinalver.parquet
+x_scale: log_odds
+labels:
+  columns:
+    Prior1245: Veteran Priority Group
+    Hosp_1y: 1-year hospitalization
+    pHosp_1y: Predicted 1-year hospitalization risk
+  groups:
+    Prior1245:
+      "0": Default Priority
+      "1": Priority Group 1
+      "2": Priority Group 2
+      "4": Priority Group 4
+      "99": Priority Group 5
+  metrics:
+    aTPR: True positive rate
+    aPPV: Positive predictive value
+    aNB: Net benefit
+    aHR: High-risk rate

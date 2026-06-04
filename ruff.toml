@@ -1,0 +1,9 @@
+indent-width = 2
+line-length = 96
+exclude = [
+  ".agents",
+  "legacy",
+]
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
