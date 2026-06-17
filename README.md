@@ -6,15 +6,21 @@ interface, deterministic synthetic demos, and self-contained HTML reports.
 
 ## Installation
 
+Install from [PyPI](https://pypi.org/project/metrics-adjuster/) (Python 3.11+):
+
 ```bash
 python -m pip install metrics-adjuster
 ```
 
-For uv-managed projects:
+That one command installs both the `metrics-adjuster` CLI and the Python API.
 
-```bash
-uv add metrics-adjuster
-```
+**Other setups:**
+
+- CLI only, without a project environment: `pipx install metrics-adjuster`
+- uv project: `uv add metrics-adjuster`
+- conda or mamba env: run the pip command above inside your activated environment
+- pinned release: `python -m pip install "metrics-adjuster==1.0.1"`
+- source checkout: see [Contributing](CONTRIBUTING.md)
 
 ## Quick Example
 

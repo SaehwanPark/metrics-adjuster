@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.0.1] - 2026-06-17
+
+### Changed
+
+- Simplified PyPI-first installation docs across `README.md`,
+  `deployment/public_docs/README.md`, and `deployment/public_docs/QUICKSTART.md`.
+
+## [1.0.0] - 2026-06-17
+
 ### Added
+
 - Added GPLv3 licensing metadata and public-release deployment tooling.
 - Added public documentation templates under `deployment/public_docs/`.
 - Added machine-readable public repository curation config and publish scripts.
@@ -18,7 +28,7 @@ All notable changes to this project will be documented in this file.
 - Added `scripts/va_can_report_config.yml` for the sampled VA CAN report review.
 
 ### Changed
-- Set release version to `1.0.0`.
+
 - Moved unsupported historical scripts and import shims under `legacy/`.
 - Updated sampled evaluation result READMEs to include copy-pasteable reproduction commands.
 - Changed CLI metric defaults for `run` and `demo` to `aTPR`; explicit `--metrics aTPR,aPPV,aNB,aHR` still computes all supported metrics.
@@ -29,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - Redesigned report HTML around numbered Table 1/Figure 1/Figure 2 sections, compact per-metric subtables, consistent plot colors, and optional log-odds plot axes.
 
 ### Fixed
+
 - Resolved strict mypy return typing in `compute_logit` (`src/metrics_adjuster/core.py`) without changing runtime behavior.
 - Declared parquet runtime support with `pyarrow` and fixed CLI reference-group coercion so numeric values like `99` work against numeric group columns.
 - Corrected Figure 2 to plot each group density normalized by the reference-group density, including the reference group at 1.0.

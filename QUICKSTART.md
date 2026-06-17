@@ -2,15 +2,14 @@
 
 ## Install
 
+From [PyPI](https://pypi.org/project/metrics-adjuster/) (Python 3.11+):
+
 ```bash
 python -m pip install metrics-adjuster
 ```
 
-or:
-
-```bash
-uv add metrics-adjuster
-```
+In a uv project: `uv add metrics-adjuster`. For CLI-only use:
+`pipx install metrics-adjuster`.
 
 ## Run the Demo
 
