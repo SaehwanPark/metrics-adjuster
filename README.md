@@ -19,7 +19,7 @@ That one command installs both the `metrics-adjuster` CLI and the Python API.
 - CLI only, without a project environment: `pipx install metrics-adjuster`
 - uv project: `uv add metrics-adjuster`
 - conda or mamba env: run the pip command above inside your activated environment
-- pinned release: `python -m pip install "metrics-adjuster==1.0.1"`
+- pinned release: `python -m pip install "metrics-adjuster==1.0.2"`
 - source checkout: see [Contributing](CONTRIBUTING.md)
 
 ## Quick Example

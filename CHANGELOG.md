@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.0.2] - 2026-06-17
+
+### Changed
+
+- PyPI publishing now curates and builds from the public repository snapshot
+  instead of the development repository.
+- PyPI long descriptions use the public `README.md`, with relative links
+  rewritten to the public GitHub repository during packaging.
+
 ## [1.0.1] - 2026-06-17
 
 ### Changed
