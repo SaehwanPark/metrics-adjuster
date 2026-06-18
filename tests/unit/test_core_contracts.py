@@ -12,6 +12,7 @@ from metrics_adjuster import (
   DensityRatioConfig,
   MetricConfig,
   MetricName,
+  OutputConfig,
   adjusted_metrics,
   compute_adjusted_metrics,
 )
@@ -131,3 +132,45 @@ def test_invalid_response_values_fail_fast() -> None:
   )
   with pytest.raises(ValueError, match="binary"):
     adjusted_metrics(df, config)
+
+
+def test_include_intermediates_returns_weighted_pipeline_frame(tmp_path) -> None:
+  df = generate_synthetic_metrics_data(n=120, seed=4)
+  config = MetricConfig(
+    columns=ColumnSpec(group="group", response="outcome", risk="risk", id="patient_id"),
+    ref_group="ref",
+    quantiles=(0.5,),
+    metrics=(MetricName.ATPR,),
+    calibration=CalibrationConfig(degree=1, cv=False),
+    density_ratio=DensityRatioConfig(degree=1, cv=False),
+    output=OutputConfig(
+      calibration_path=tmp_path / "calibration.parquet",
+      density_ratio_path=tmp_path / "weights.parquet",
+      include_intermediates=True,
+    ),
+    random_state=4,
+  )
+  result = adjusted_metrics(df, config)
+
+  assert result.calibrated is not None
+  assert result.weighted is not None
+  assert "cal_risk" in result.calibrated.columns
+  assert {"cal_risk", "dens_ratio"}.issubset(result.weighted.columns)
+  assert (tmp_path / "calibration.parquet").exists()
+  assert (tmp_path / "weights.parquet").exists()
+  ref_weights = result.weighted.loc[result.weighted["group"] == "ref", "dens_ratio"]
+  assert ref_weights.eq(1.0).all()
+
+
+def test_default_result_omits_intermediate_frames() -> None:
+  df = generate_synthetic_metrics_data(n=80, seed=5)
+  config = MetricConfig(
+    columns=ColumnSpec(group="group", response="outcome", risk="risk"),
+    ref_group="ref",
+    quantiles=(0.5,),
+    metrics=(MetricName.ATPR,),
+  )
+  result = adjusted_metrics(df, config)
+
+  assert result.calibrated is None
+  assert result.weighted is None

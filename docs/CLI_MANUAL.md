@@ -27,8 +27,9 @@ metrics-adjuster --help
 
 ```text
 metrics-adjuster
-├── demo  # generate synthetic data and metric outputs
-└── run   # compute metrics for a caller-provided CSV or Parquet table
+├── demo               # generate synthetic data and metric outputs
+├── generate-synthetic # write reproducible synthetic data under data/generated/
+└── run                # compute metrics for a caller-provided CSV or Parquet table
 ```
 
 ## `metrics-adjuster demo`
@@ -54,6 +55,9 @@ Arguments:
 | `--report` | no | disabled | Write `report.html` with report tables and plots. |
 | `--report-title` | no | `Synthetic Adjusted Metrics Report` | HTML report title. |
 | `--report-max-cutoff-lines` | no | `8` | Maximum cutoff reference lines per plot. |
+| `--report-figures` | no | disabled | Write standalone figure files (requires `--report`). |
+| `--report-figure-format` | no | `svg` | Figure format for `--report-figures` (`svg` or `png`). |
+| `--save-artifacts` | no | disabled | Write `calibration.parquet` and `weights.parquet`. |
 
 Outputs:
 
@@ -61,7 +65,11 @@ Outputs:
 demo_outputs/
 ├── synthetic_metrics_data.csv
 ├── aTPR.csv
-└── report.html  # only when --report is used
+├── calibration.parquet      # with --save-artifacts
+├── weights.parquet          # with --save-artifacts
+├── figure_1_calibrated_density.svg  # with --report --report-figures
+├── figure_2_weight_ratio.svg        # with --report --report-figures
+└── report.html              # with --report
 ```
 
 Each adjusted metric CSV also includes the matching conventional metric column.
@@ -116,6 +124,9 @@ uv run metrics-adjuster run \
 | `--report-title` | `Adjusted Metrics Report` | HTML report title. |
 | `--report-max-cutoff-lines` | `8` | Maximum cutoff reference lines per plot. |
 | `--report-config-yaml` | omitted | YAML file for report title, labels, and plot x-axis scale. |
+| `--report-figures` | disabled | Write standalone figure files (requires `--report`). |
+| `--report-figure-format` | `svg` | Figure format for `--report-figures` (`svg` or `png`). |
+| `--save-artifacts` | disabled | Write `calibration.parquet` and `weights.parquet`. |
 
 ## Input requirements
 
@@ -161,6 +172,20 @@ When `--report` is used, the CLI also writes `report.html`. The report contains:
   and adjusted value with interval when bootstrap is enabled.
 - Calibrated probability density plots for the reference and comparison groups.
 - Density plots normalized to the reference-group density.
+
+When `--report-figures` is also used, standalone files are written:
+
+```text
+figure_1_calibrated_density.svg
+figure_2_weight_ratio.svg
+```
+
+When `--save-artifacts` is used, row-level parquet artifacts are written:
+
+| File | Columns |
+| --- | --- |
+| `calibration.parquet` | `cal_risk` plus `id` when `--id-col` is set |
+| `weights.parquet` | `dens_ratio` plus `id` when `--id-col` is set |
 
 Confidence interval fields use bootstrap summaries when `--bootstrap` is also
 enabled. Without bootstrap, those fields are shown as unavailable.
@@ -267,6 +292,35 @@ uv run metrics-adjuster run \
   --report \
   --report-title "Adjusted metric report"
 ```
+
+## `metrics-adjuster generate-synthetic`
+
+Write reproducible synthetic row-level data under `data/generated/` without
+running metrics:
+
+```bash
+uv run metrics-adjuster generate-synthetic \
+  --output-dir data/generated/synthetic-metrics-demo \
+  --n 600 \
+  --seed 2026
+```
+
+| Argument | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `--output-dir` | yes | none | Must be under `data/generated/`. |
+| `--n` | no | `600` | Number of synthetic rows. |
+| `--seed` | no | `2026` | Random seed. |
+
+Outputs:
+
+```text
+data/generated/synthetic-metrics-demo/
+├── synthetic_metrics_data.csv
+└── sample.parquet
+```
+
+See `results/synthetic-metrics-demo/README.md` for a tracked reproduction guide.
+R users can follow `docs/R_CLI_GUIDE.md`.
 
 ## Standalone integration script
 

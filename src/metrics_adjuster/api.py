@@ -10,6 +10,7 @@ import pandas as pd
 from metrics_adjuster.core import (
   MetricFrames,
   QuantilesFrom,
+  attach_pipeline_intermediates,
   run_adjusted_metrics,
   run_metric_pipeline,
 )
@@ -45,7 +46,7 @@ def adjusted_metrics_report(
   pipeline = run_metric_pipeline(df, config, quantiles_from)
   resolved_report_config = report_config or ReportConfig()
   return build_report_bundle(
-    pipeline.metrics,
+    attach_pipeline_intermediates(pipeline, config),
     pipeline.weighted,
     config,
     resolved_report_config,

@@ -62,12 +62,18 @@ class BootstrapConfig(BaseModel):
 
 
 class OutputConfig(BaseModel):
-  """Optional files to persist intermediate pipeline outputs."""
+  """Optional files to persist intermediate pipeline outputs.
+
+  Disk paths and ``include_intermediates`` are independent: set paths to write
+  parquet files, set ``include_intermediates`` to return in-memory frames, or
+  combine both when callers need both surfaces.
+  """
 
   model_config = ConfigDict(frozen=True)
 
   calibration_path: Path | None = None
   density_ratio_path: Path | None = None
+  include_intermediates: bool = False
 
 
 class ReportLabelConfig(BaseModel):

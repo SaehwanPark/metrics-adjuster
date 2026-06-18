@@ -13,6 +13,7 @@ from metrics_adjuster.reporting import (
   metric_comparison_table,
   render_report_html,
   weight_ratio_figure,
+  write_report_figures,
 )
 from metrics_adjuster.types import (
   BootstrapConfig,
@@ -46,4 +47,5 @@ __all__ = [
   "metric_comparison_table",
   "render_report_html",
   "weight_ratio_figure",
+  "write_report_figures",
 ]

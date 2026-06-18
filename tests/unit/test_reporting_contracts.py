@@ -14,6 +14,7 @@ from metrics_adjuster import (
   ReportLabelConfig,
   adjusted_metrics_report,
   metric_comparison_table,
+  write_report_figures,
 )
 from metrics_adjuster.core import run_metric_pipeline
 from metrics_adjuster.reporting import cutoff_reference_lines
@@ -230,3 +231,18 @@ def test_adjusted_metrics_report_accepts_empty_metric_selection() -> None:
   assert len(bundle.density_figure.axes) == 1
   assert len(bundle.weight_ratio_figure.axes) == 1
   assert "Table 1. Metric Estimates" in bundle.html
+
+
+def test_write_report_figures_writes_svg_and_png(tmp_path) -> None:
+  df = generate_synthetic_metrics_data(n=120, seed=13)
+  bundle = adjusted_metrics_report(df, report_config(quantiles=(0.5,)))
+
+  svg_density, svg_weight = write_report_figures(bundle, tmp_path / "svg", figure_format="svg")
+  png_density, png_weight = write_report_figures(bundle, tmp_path / "png", figure_format="png")
+
+  assert svg_density.name == "figure_1_calibrated_density.svg"
+  assert svg_weight.name == "figure_2_weight_ratio.svg"
+  assert png_density.suffix == ".png"
+  assert png_weight.suffix == ".png"
+  assert svg_density.exists()
+  assert png_weight.exists()

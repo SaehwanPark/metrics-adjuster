@@ -33,8 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def is_generated_data_path(path: Path) -> bool:
-  """Return whether a path is under a data/generated directory."""
-  parts = path.expanduser().parts
+  """Return whether a resolved path is under a data/generated directory."""
+  parts = path.expanduser().resolve().parts
   return any(
     current == "data" and next_part == "generated"
     for current, next_part in zip(parts, parts[1:], strict=False)

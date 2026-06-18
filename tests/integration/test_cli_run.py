@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 import pandas as pd
+import pytest
 
 from metrics_adjuster.cli import main
 
@@ -137,3 +138,86 @@ labels:
   assert "Reference group" in report
   assert "True positive rate" in report
   assert "Table 1. Metric Estimates" in report
+
+
+def test_cli_run_save_artifacts_writes_parquet(tmp_path, monkeypatch) -> None:
+  input_path = tmp_path / "input.parquet"
+  df = pd.DataFrame(
+    {
+      "Prior1245": [99, 99, 1, 1, 2, 2] * 6,
+      "Hosp_1y": [1, 0, 1, 0, 1, 0] * 6,
+      "pHosp_1y": [0.92, 0.21, 0.81, 0.32, 0.71, 0.11] * 6,
+      "patient_id": list(range(36)),
+    }
+  )
+  df.to_parquet(input_path, index=False)
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "metrics-adjuster",
+      "run",
+      "--input",
+      str(input_path),
+      "--output-dir",
+      str(tmp_path / "outputs"),
+      "--group-col",
+      "Prior1245",
+      "--ref-group",
+      "99",
+      "--response-col",
+      "Hosp_1y",
+      "--risk-col",
+      "pHosp_1y",
+      "--id-col",
+      "patient_id",
+      "--quantiles",
+      "0.5",
+      "--save-artifacts",
+    ],
+  )
+
+  main()
+
+  output_dir = tmp_path / "outputs"
+  calibration = pd.read_parquet(output_dir / "calibration.parquet")
+  weights = pd.read_parquet(output_dir / "weights.parquet")
+  assert {"patient_id", "cal_risk"}.issubset(calibration.columns)
+  assert {"patient_id", "dens_ratio"}.issubset(weights.columns)
+  assert weights.loc[weights["patient_id"].isin([0, 1]), "dens_ratio"].eq(1.0).all()
+
+
+def test_cli_run_report_figures_requires_report(tmp_path, monkeypatch) -> None:
+  input_path = tmp_path / "input.parquet"
+  df = pd.DataFrame(
+    {
+      "group": ["ref", "alt"],
+      "outcome": [1, 0],
+      "risk": [0.5, 0.5],
+    }
+  )
+  df.to_parquet(input_path, index=False)
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "metrics-adjuster",
+      "run",
+      "--input",
+      str(input_path),
+      "--output-dir",
+      str(tmp_path / "outputs"),
+      "--group-col",
+      "group",
+      "--ref-group",
+      "ref",
+      "--response-col",
+      "outcome",
+      "--risk-col",
+      "risk",
+      "--report-figures",
+    ],
+  )
+  with pytest.raises(SystemExit, match="--report-figures requires --report"):
+    main()

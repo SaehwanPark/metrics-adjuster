@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 import yaml
 
 from metrics_adjuster.api import adjusted_metrics, adjusted_metrics_report
+from metrics_adjuster.reporting import ReportBundle, write_report_figures
 from metrics_adjuster.synthetic import generate_synthetic_metrics_data
 from metrics_adjuster.types import (
   BootstrapConfig,
@@ -18,6 +19,7 @@ from metrics_adjuster.types import (
   DensityRatioConfig,
   MetricConfig,
   MetricName,
+  OutputConfig,
   ReportConfig,
 )
 
@@ -46,6 +48,15 @@ def resolve_reference_group(raw_value: str, groups: pd.Series) -> Any:
   if len(matches) == 1:
     return matches[0]
   return raw_value
+
+
+def is_generated_data_path(path: Path) -> bool:
+  """Return whether a resolved path is under a data/generated directory."""
+  parts = path.expanduser().resolve().parts
+  return any(
+    current == "data" and next_part == "generated"
+    for current, next_part in zip(parts, parts[1:], strict=False)
+  )
 
 
 def read_table(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
@@ -91,7 +102,21 @@ def build_report_config(args: argparse.Namespace) -> ReportConfig:
   return ReportConfig.model_validate(base)
 
 
-def build_run_config(args: argparse.Namespace, df: pd.DataFrame) -> MetricConfig:
+def build_output_config(args: argparse.Namespace, output_dir: Path) -> OutputConfig:
+  """Create optional artifact persistence config from CLI flags."""
+  if not args.save_artifacts:
+    return OutputConfig()
+  return OutputConfig(
+    calibration_path=output_dir / "calibration.parquet",
+    density_ratio_path=output_dir / "weights.parquet",
+  )
+
+
+def build_run_config(
+  args: argparse.Namespace,
+  df: pd.DataFrame,
+  output_dir: Path,
+) -> MetricConfig:
   """Create validated config for the public ``run`` command."""
   return MetricConfig(
     columns=ColumnSpec(
@@ -106,7 +131,67 @@ def build_run_config(args: argparse.Namespace, df: pd.DataFrame) -> MetricConfig
     calibration=CalibrationConfig(degree=args.cal_degree, cv=args.cv),
     density_ratio=DensityRatioConfig(degree=args.dr_degree, cv=args.cv),
     bootstrap=BootstrapConfig(enabled=args.bootstrap, iterations=args.n_boot),
+    output=build_output_config(args, output_dir),
     random_state=args.seed,
+  )
+
+
+def require_report_for_figures(args: argparse.Namespace) -> None:
+  """Reject standalone figure export without an HTML report."""
+  if args.report_figures and not args.report:
+    raise SystemExit("--report-figures requires --report")
+
+
+def write_report_bundle_outputs(
+  bundle: ReportBundle,
+  output_dir: Path,
+  *,
+  report_figures: bool,
+  report_figure_format: Literal["svg", "png"],
+) -> None:
+  """Write HTML and optional standalone report figures."""
+  write_report_output(bundle.html, output_dir)
+  if report_figures:
+    write_report_figures(
+      bundle,
+      output_dir,
+      figure_format=report_figure_format,
+    )
+
+
+def add_report_arguments(
+  parser: argparse.ArgumentParser,
+  *,
+  default_report_title: str = "Adjusted Metrics Report",
+) -> None:
+  """Add shared report flags to a subcommand parser."""
+  parser.add_argument(
+    "--report",
+    action="store_true",
+    help="write a self-contained HTML report",
+  )
+  parser.add_argument("--report-title", default=default_report_title)
+  parser.add_argument("--report-max-cutoff-lines", type=int, default=8)
+  parser.add_argument("--report-config-yaml", type=Path)
+  parser.add_argument(
+    "--report-figures",
+    action="store_true",
+    help="write standalone report figure files (requires --report)",
+  )
+  parser.add_argument(
+    "--report-figure-format",
+    choices=("svg", "png"),
+    default="svg",
+    help="file format for --report-figures",
+  )
+
+
+def add_artifact_arguments(parser: argparse.ArgumentParser) -> None:
+  """Add shared artifact persistence flags to a subcommand parser."""
+  parser.add_argument(
+    "--save-artifacts",
+    action="store_true",
+    help="write calibration.parquet and weights.parquet under --output-dir",
   )
 
 
@@ -131,30 +216,36 @@ def build_parser() -> argparse.ArgumentParser:
   run.add_argument("--bootstrap", action="store_true")
   run.add_argument("--n-boot", type=int, default=100)
   run.add_argument("--seed", type=int, default=None)
-  run.add_argument("--report", action="store_true", help="write a self-contained HTML report")
-  run.add_argument("--report-title", default="Adjusted Metrics Report")
-  run.add_argument("--report-max-cutoff-lines", type=int, default=8)
-  run.add_argument("--report-config-yaml", type=Path)
+  add_report_arguments(run)
+  add_artifact_arguments(run)
 
   demo = subcommands.add_parser("demo", help="run on synthetic data")
   demo.add_argument("--output-dir", type=Path, required=True)
   demo.add_argument("--n", type=int, default=600)
   demo.add_argument("--seed", type=int, default=2026)
   demo.add_argument("--metrics", default="aTPR")
-  demo.add_argument("--report", action="store_true", help="write a self-contained HTML report")
-  demo.add_argument("--report-title", default="Synthetic Adjusted Metrics Report")
-  demo.add_argument("--report-max-cutoff-lines", type=int, default=8)
-  demo.add_argument("--report-config-yaml", type=Path)
+  add_report_arguments(demo, default_report_title="Synthetic Adjusted Metrics Report")
+  add_artifact_arguments(demo)
+
+  generate = subcommands.add_parser(
+    "generate-synthetic",
+    help="write reproducible synthetic data under data/generated/",
+  )
+  generate.add_argument("--output-dir", type=Path, required=True)
+  generate.add_argument("--n", type=int, default=600)
+  generate.add_argument("--seed", type=int, default=2026)
   return parser
 
 
 def run_command(args: argparse.Namespace) -> None:
   """Execute the run subcommand."""
+  require_report_for_figures(args)
+  args.output_dir.mkdir(parents=True, exist_ok=True)
   columns = [args.group_col, args.response_col, args.risk_col]
   if args.id_col is not None:
     columns.append(args.id_col)
   df = read_table(args.input, columns)
-  config = build_run_config(args, df)
+  config = build_run_config(args, df, args.output_dir)
   if args.report:
     bundle = adjusted_metrics_report(
       df,
@@ -162,7 +253,12 @@ def run_command(args: argparse.Namespace) -> None:
       build_report_config(args),
     )
     result = bundle.metrics
-    write_report_output(bundle.html, args.output_dir)
+    write_report_bundle_outputs(
+      bundle,
+      args.output_dir,
+      report_figures=args.report_figures,
+      report_figure_format=args.report_figure_format,
+    )
   else:
     result = adjusted_metrics(df, config)
   write_metric_outputs(result.metrics, args.output_dir)
@@ -172,6 +268,7 @@ def run_command(args: argparse.Namespace) -> None:
 
 def demo_command(args: argparse.Namespace) -> None:
   """Execute the synthetic demo subcommand."""
+  require_report_for_figures(args)
   args.output_dir.mkdir(parents=True, exist_ok=True)
   data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
   data_path = args.output_dir / "synthetic_metrics_data.csv"
@@ -183,6 +280,7 @@ def demo_command(args: argparse.Namespace) -> None:
     metrics=parse_metrics(args.metrics),
     calibration=CalibrationConfig(degree=2, cv=False),
     density_ratio=DensityRatioConfig(degree=1, cv=False),
+    output=build_output_config(args, args.output_dir),
     random_state=args.seed,
   )
   if args.report:
@@ -192,10 +290,28 @@ def demo_command(args: argparse.Namespace) -> None:
       build_report_config(args),
     )
     result = bundle.metrics
-    write_report_output(bundle.html, args.output_dir)
+    write_report_bundle_outputs(
+      bundle,
+      args.output_dir,
+      report_figures=args.report_figures,
+      report_figure_format=args.report_figure_format,
+    )
   else:
     result = adjusted_metrics(data, config)
   write_metric_outputs(result.metrics, args.output_dir)
+
+
+def generate_synthetic_command(args: argparse.Namespace) -> None:
+  """Write reproducible synthetic data without running metrics."""
+  if not is_generated_data_path(args.output_dir):
+    raise SystemExit("--output-dir must be under an ignored data/generated directory")
+  if args.n <= 0:
+    raise SystemExit("--n must be greater than 0")
+  args.output_dir.mkdir(parents=True, exist_ok=True)
+  data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
+  data.to_csv(args.output_dir / "synthetic_metrics_data.csv", index=False)
+  data.to_parquet(args.output_dir / "sample.parquet", index=False)
+  print(f"Wrote synthetic data to {args.output_dir}")
 
 
 def main() -> None:
@@ -206,6 +322,8 @@ def main() -> None:
     run_command(args)
   elif args.command == "demo":
     demo_command(args)
+  elif args.command == "generate-synthetic":
+    generate_synthetic_command(args)
 
 
 if __name__ == "__main__":

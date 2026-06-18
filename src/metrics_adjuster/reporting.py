@@ -7,7 +7,8 @@ import html
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -340,6 +341,21 @@ def figure_to_data_uri(figure: Figure) -> str:
   figure.savefig(buffer, format="svg", bbox_inches="tight")
   encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
   return f"data:image/svg+xml;base64,{encoded}"
+
+
+def write_report_figures(
+  bundle: ReportBundle,
+  output_dir: Path,
+  *,
+  figure_format: Literal["svg", "png"] = "svg",
+) -> tuple[Path, Path]:
+  """Write standalone report figures next to an HTML report."""
+  output_dir.mkdir(parents=True, exist_ok=True)
+  density_path = output_dir / f"figure_1_calibrated_density.{figure_format}"
+  weight_path = output_dir / f"figure_2_weight_ratio.{figure_format}"
+  bundle.density_figure.savefig(density_path, format=figure_format, bbox_inches="tight")
+  bundle.weight_ratio_figure.savefig(weight_path, format=figure_format, bbox_inches="tight")
+  return density_path, weight_path
 
 
 def report_summary_items(

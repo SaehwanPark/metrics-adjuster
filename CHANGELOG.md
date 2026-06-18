@@ -2,7 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [1.1.0] - 2026-06-17
+
+### Added
+
+- Added CLI `--save-artifacts` for `run` and `demo` to write
+  `calibration.parquet` and `weights.parquet`.
+- Added `OutputConfig.include_intermediates` and optional `MetricFrames.calibrated`
+  / `MetricFrames.weighted` for in-memory pipeline inspection.
+- Added CLI `--report-figures` and `--report-figure-format` to export standalone
+  report figure files alongside `report.html`.
+- Added `write_report_figures(...)` for API callers exporting Matplotlib figures.
+- Added `metrics-adjuster generate-synthetic` and
+  `scripts/prepare_synthetic_demo_data.py` for reproducible synthetic data under
+  `data/generated/`.
+- Added `docs/R_CLI_GUIDE.md` for calling the CLI from R.
+- Added `results/synthetic-metrics-demo/README.md` reproduction guide.
 
 ## [1.0.2] - 2026-06-17
 

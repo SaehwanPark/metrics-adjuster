@@ -166,8 +166,13 @@ from metrics_adjuster import OutputConfig
 output = OutputConfig(
   calibration_path=Path("artifacts/calibration.parquet"),
   density_ratio_path=Path("artifacts/density_ratio.parquet"),
+  include_intermediates=True,
 )
 ```
+
+When `include_intermediates=True`, `adjusted_metrics(...)` also returns
+`result.calibrated` and `result.weighted` in memory. Disk paths and in-memory
+intermediates are independent options.
 
 These outputs are written at the API boundary. The core metric outputs are still returned in memory.
 
@@ -225,6 +230,8 @@ appv = result.metrics["aPPV"]
 ```python
 result.metrics     # dict[str, pandas.DataFrame]
 result.bootstrap   # pandas.DataFrame | None
+result.calibrated  # pandas.DataFrame | None
+result.weighted    # pandas.DataFrame | None
 result.as_dict()   # compatibility-shaped dictionary
 ```
 
@@ -276,6 +283,7 @@ Individual component functions are also exported for custom workflows:
 - `calibrated_density_figure(...)`
 - `weight_ratio_figure(...)`
 - `render_report_html(...)`
+- `write_report_figures(...)`
 
 The rendered HTML shows compact per-metric subtables under Table 1. Report plots
 can use calibrated probability or calibrated log-odds on the x-axis through

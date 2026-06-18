@@ -37,6 +37,8 @@ class MetricFrames:
 
   metrics: dict[str, pd.DataFrame]
   bootstrap: pd.DataFrame | None = None
+  calibrated: pd.DataFrame | None = None
+  weighted: pd.DataFrame | None = None
 
   def as_dict(self) -> dict[str, Any]:
     result: dict[str, Any] = {"metrics": self.metrics}
@@ -601,10 +603,14 @@ def persist_stage_outputs(config: MetricConfig, cal: StageResult, dr: StageResul
   id_col = config.columns.id
   if config.output.calibration_path is not None:
     cols = ["cal_risk"] if id_col is None else [id_col, "cal_risk"]
-    cal.data[cols].to_parquet(config.output.calibration_path, index=False)
+    calibration_path = config.output.calibration_path
+    calibration_path.parent.mkdir(parents=True, exist_ok=True)
+    cal.data[cols].to_parquet(calibration_path, index=False)
   if config.output.density_ratio_path is not None:
     cols = ["dens_ratio"] if id_col is None else [id_col, "dens_ratio"]
-    dr.data[cols].to_parquet(config.output.density_ratio_path, index=False)
+    weights_path = config.output.density_ratio_path
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
+    dr.data[cols].to_parquet(weights_path, index=False)
 
 
 def run_metric_pipeline(
@@ -666,10 +672,27 @@ def run_metric_pipeline(
   )
 
 
+def attach_pipeline_intermediates(
+  pipeline: PipelineFrames,
+  config: MetricConfig,
+) -> MetricFrames:
+  """Return metric frames, optionally including in-memory pipeline intermediates."""
+  result = pipeline.metrics
+  if not config.output.include_intermediates:
+    return result
+  return MetricFrames(
+    metrics=result.metrics,
+    bootstrap=result.bootstrap,
+    calibrated=pipeline.calibrated,
+    weighted=pipeline.weighted,
+  )
+
+
 def run_adjusted_metrics(
   df: pd.DataFrame,
   config: MetricConfig,
   quantiles_from: QuantilesFrom | None = None,
 ) -> MetricFrames:
   """Run calibration, density-ratio estimation, and adjusted metric computation."""
-  return run_metric_pipeline(df, config, quantiles_from).metrics
+  pipeline = run_metric_pipeline(df, config, quantiles_from)
+  return attach_pipeline_intermediates(pipeline, config)
