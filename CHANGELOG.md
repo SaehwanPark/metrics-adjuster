@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added opt-in legacy Xiaoyi-style adjusted metrics: `aFPR`, `aNPV`, `aBSP`,
+  `aBSN`, and `aSP`.
+- Added fixed-threshold evaluation through `MetricConfig.thresholds` and CLI
+  `--thresholds`.
+- Added optional pairwise reference-vs-comparison delta outputs through
+  `MetricConfig.pairwise` and CLI `--pairwise-deltas`.
+- Added a Xiaoyi-style simulation data generator for alignment tests.
+
 ## [1.1.0] - 2026-06-17
 
 ### Added

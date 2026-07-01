@@ -113,7 +113,9 @@ uv run metrics-adjuster run \
 | --- | --- | --- |
 | `--id-col` | omitted | Optional stable row identifier. |
 | `--quantiles` | `0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9` | Comma-separated quantiles used to select thresholds. |
+| `--thresholds` | omitted | Comma-separated fixed risk thresholds evaluated in addition to quantiles. |
 | `--metrics` | `aTPR` | Comma-separated adjusted metrics to compute. |
+| `--pairwise-deltas` | disabled | Write `pairwise.csv` with reference-vs-comparison deltas. |
 | `--cal-degree` | `2` | Polynomial degree for calibration. |
 | `--dr-degree` | `1` | Polynomial degree for density-ratio estimation. |
 | `--cv` | disabled | Use group-wise cross-fitting for calibration and density-ratio models. |
@@ -148,11 +150,37 @@ The CLI writes one CSV per requested adjusted metric. The file name is the adjus
 | File | Columns |
 | --- | --- |
 | `aTPR.csv` | group column, `quantile`, `tau`, `TPR`, `aTPR` |
+| `aFPR.csv` | group column, `quantile`, `tau`, `FPR`, `aFPR` |
 | `aPPV.csv` | group column, `quantile`, `tau`, `PPV`, `aPPV` |
+| `aNPV.csv` | group column, `quantile`, `tau`, `NPV`, `aNPV` |
+| `aBSP.csv` | group column, `quantile`, `tau`, `BSP`, `aBSP` |
+| `aBSN.csv` | group column, `quantile`, `tau`, `BSN`, `aBSN` |
+| `aSP.csv` | group column, `quantile`, `tau`, `SP`, `aSP` |
 | `aNB.csv` | group column, `quantile`, `tau`, `NB`, `aNB` |
 | `aHR.csv` | group column, `quantile`, `tau`, `HR`, `aHR` |
 
 The group column keeps the same name that you pass to `--group-col`.
+
+For fixed-threshold Xiaoyi-style alignment runs, pass an empty quantile list and
+one or more thresholds:
+
+```bash
+uv run metrics-adjuster run \
+  --input path/to/input.csv \
+  --output-dir adjusted_metric_outputs \
+  --group-col group \
+  --ref-group 0 \
+  --response-col outcome \
+  --risk-col risk \
+  --quantiles "" \
+  --thresholds 0.3 \
+  --metrics aTPR,aFPR,aPPV,aNPV,aBSP,aBSN,aSP \
+  --pairwise-deltas
+```
+
+When `--pairwise-deltas` is used, `pairwise.csv` contains `metric`, the group
+column, `reference_group`, `quantile`, `tau`, `reference_value`,
+`comparison_value`, `adjusted_comparison_value`, `delta`, and `adjusted_delta`.
 
 When `--bootstrap` is enabled, metric CSVs also include adjusted-metric bootstrap summary columns:
 

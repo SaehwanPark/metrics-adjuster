@@ -92,7 +92,12 @@ Supported adjusted metric names are:
 | Enum | Value | Conventional companion |
 | --- | --- | --- |
 | `MetricName.ATPR` | `aTPR` | `TPR` |
+| `MetricName.AFPR` | `aFPR` | `FPR` |
 | `MetricName.APPV` | `aPPV` | `PPV` |
+| `MetricName.ANPV` | `aNPV` | `NPV` |
+| `MetricName.ABSP` | `aBSP` | `BSP` |
+| `MetricName.ABSN` | `aBSN` | `BSN` |
+| `MetricName.ASP` | `aSP` | `SP` |
 | `MetricName.ANB` | `aNB` | `NB` |
 | `MetricName.AHR` | `aHR` | `HR` |
 
@@ -300,9 +305,9 @@ Each requested adjusted metric produces one frame. The common columns are:
 | --- | --- |
 | configured group column | Group value. For example, `group`, `sex`, or `race`. |
 | `quantile` | Requested quantile used to choose the risk threshold. |
-| `tau` | Risk threshold corresponding to that quantile. |
-| conventional metric | One of `TPR`, `PPV`, `NB`, or `HR`. |
-| adjusted metric | One of `aTPR`, `aPPV`, `aNB`, or `aHR`. |
+| `tau` | Risk threshold corresponding to that quantile or fixed threshold. |
+| conventional metric | One of `TPR`, `FPR`, `PPV`, `NPV`, `BSP`, `BSN`, `SP`, `NB`, or `HR`. |
+| adjusted metric | One of the requested adjusted metric columns. |
 
 Example `aTPR` columns:
 
@@ -321,13 +326,19 @@ With bootstrap enabled, adjusted-metric bootstrap summary columns are appended.
 ## Metric definitions
 
 For threshold `tau`, define `high_risk = risk > tau`.
+For NPV, define `low_risk = 1 - high_risk`.
 
 The conventional metrics use observed outcomes and no density-ratio weights:
 
 | Metric | Definition |
 | --- | --- |
 | `TPR` | `mean(outcome * high_risk) / mean(outcome)` |
+| `FPR` | `mean((1 - outcome) * high_risk) / mean(1 - outcome)` |
 | `PPV` | `mean(outcome * high_risk) / mean(high_risk)` |
+| `NPV` | `mean((1 - outcome) * low_risk) / mean(low_risk)` |
+| `BSP` | `mean(risk * outcome) / mean(outcome)` |
+| `BSN` | `mean(risk * (1 - outcome)) / mean(1 - outcome)` |
+| `SP` | `mean(high_risk)` |
 | `NB` | `mean(high_risk * outcome) - mean(high_risk * (1 - outcome)) * tau / (1 - tau)` |
 | `HR` | `mean(high_risk)` |
 
@@ -336,11 +347,36 @@ The adjusted metrics use calibrated risk (`cal_risk`) and density ratios (`dens_
 | Metric | Definition |
 | --- | --- |
 | `aTPR` | `mean(cal_risk * high_risk * dens_ratio) / mean(cal_risk * dens_ratio)` |
+| `aFPR` | `mean((1 - cal_risk) * high_risk * dens_ratio) / mean((1 - cal_risk) * dens_ratio)` |
 | `aPPV` | `mean(cal_risk * high_risk * dens_ratio) / mean(high_risk * dens_ratio)` |
+| `aNPV` | `mean((1 - cal_risk) * low_risk * dens_ratio) / mean(low_risk * dens_ratio)` |
+| `aBSP` | `mean(risk * cal_risk * dens_ratio) / mean(cal_risk * dens_ratio)` |
+| `aBSN` | `mean(risk * (1 - cal_risk) * dens_ratio) / mean((1 - cal_risk) * dens_ratio)` |
+| `aSP` | `mean(high_risk * dens_ratio) / mean(dens_ratio)` |
 | `aNB` | `(mean(high_risk * cal_risk * dens_ratio) - mean(high_risk * (1 - cal_risk) * dens_ratio) * tau / (1 - tau)) / mean(dens_ratio)` |
 | `aHR` | `mean(high_risk * dens_ratio) / mean(dens_ratio)` |
 
 Undefined ratios return `NaN` rather than raising during metric computation.
+
+## Fixed Thresholds And Pairwise Deltas
+
+Use `MetricConfig.thresholds` for fixed decision thresholds. Threshold-only
+runs set `quantiles=()` and record `NaN` in the output `quantile` column.
+
+```python
+config = MetricConfig(
+  columns=ColumnSpec(group="group", response="outcome", risk="risk"),
+  ref_group="0",
+  quantiles=(),
+  thresholds=(0.3,),
+  metrics=(MetricName.ATPR, MetricName.AFPR),
+  pairwise=True,
+)
+```
+
+When `pairwise=True`, `result.pairwise` contains `metric`, the configured group
+column, `reference_group`, `quantile`, `tau`, `reference_value`,
+`comparison_value`, `adjusted_comparison_value`, `delta`, and `adjusted_delta`.
 
 ## Quantile source masks
 

@@ -188,6 +188,58 @@ def test_cli_run_save_artifacts_writes_parquet(tmp_path, monkeypatch) -> None:
   assert weights.loc[weights["patient_id"].isin([0, 1]), "dens_ratio"].eq(1.0).all()
 
 
+def test_cli_run_writes_fixed_threshold_pairwise_deltas(tmp_path, monkeypatch) -> None:
+  input_path = tmp_path / "input.parquet"
+  df = pd.DataFrame(
+    {
+      "group": ["ref", "ref", "alt", "alt"] * 8,
+      "outcome": [1, 0, 1, 0] * 8,
+      "risk": [0.82, 0.22, 0.72, 0.12] * 8,
+    }
+  )
+  df.to_parquet(input_path, index=False)
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "metrics-adjuster",
+      "run",
+      "--input",
+      str(input_path),
+      "--output-dir",
+      str(tmp_path / "outputs"),
+      "--group-col",
+      "group",
+      "--ref-group",
+      "ref",
+      "--response-col",
+      "outcome",
+      "--risk-col",
+      "risk",
+      "--quantiles",
+      "",
+      "--thresholds",
+      "0.3",
+      "--metrics",
+      "aTPR,aFPR,aPPV,aNPV,aBSP,aBSN,aSP",
+      "--pairwise-deltas",
+    ],
+  )
+
+  main()
+
+  output_dir = tmp_path / "outputs"
+  pairwise = pd.read_csv(output_dir / "pairwise.csv")
+  atpr = pd.read_csv(output_dir / "aTPR.csv")
+
+  assert set(pairwise["metric"]) == {"aTPR", "aFPR", "aPPV", "aNPV", "aBSP", "aBSN", "aSP"}
+  assert pairwise["tau"].eq(0.3).all()
+  assert pairwise["quantile"].isna().all()
+  assert atpr["quantile"].isna().all()
+  assert {"reference_value", "comparison_value", "adjusted_delta"}.issubset(pairwise.columns)
+
+
 def test_cli_run_report_figures_requires_report(tmp_path, monkeypatch) -> None:
   input_path = tmp_path / "input.parquet"
   df = pd.DataFrame(

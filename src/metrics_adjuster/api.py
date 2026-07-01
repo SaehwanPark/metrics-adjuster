@@ -16,6 +16,7 @@ from metrics_adjuster.core import (
 )
 from metrics_adjuster.reporting import ReportBundle, build_report_bundle
 from metrics_adjuster.types import (
+  DEFAULT_METRICS,
   BootstrapConfig,
   CalibrationConfig,
   ColumnSpec,
@@ -60,9 +61,11 @@ def compute_adjusted_metrics(
   response_col: str,
   orig_risk_col: str,
   quantiles: list[float],
+  thresholds: list[float] | None = None,
   quantiles_from: QuantilesFrom | None = None,
   idvar: str | None = "patienticn",
   metrics: list[str] | None = None,
+  pairwise: bool = False,
   cal_degree: int = 2,
   dr_degree: int = 1,
   transform_cal: bool = True,
@@ -80,7 +83,9 @@ def compute_adjusted_metrics(
     columns=ColumnSpec(group=group_col, response=response_col, risk=orig_risk_col, id=idvar),
     ref_group=ref_group,
     quantiles=tuple(quantiles),
-    metrics=tuple(MetricName(metric) for metric in metrics) if metrics else tuple(MetricName),
+    thresholds=tuple(thresholds or ()),
+    metrics=tuple(MetricName(metric) for metric in metrics) if metrics else DEFAULT_METRICS,
+    pairwise=pairwise,
     calibration=CalibrationConfig(degree=cal_degree, transform=transform_cal, cv=cv),
     density_ratio=DensityRatioConfig(degree=dr_degree, transform=transform_dr, cv=cv),
     bootstrap=BootstrapConfig(enabled=se_boot, iterations=n_boot, alpha=alpha),

@@ -36,12 +36,15 @@ class MetricFrames:
   """Data returned by the public adjusted-metrics API."""
 
   metrics: dict[str, pd.DataFrame]
+  pairwise: pd.DataFrame | None = None
   bootstrap: pd.DataFrame | None = None
   calibrated: pd.DataFrame | None = None
   weighted: pd.DataFrame | None = None
 
   def as_dict(self) -> dict[str, Any]:
     result: dict[str, Any] = {"metrics": self.metrics}
+    if self.pairwise is not None:
+      result["pairwise"] = self.pairwise
     if self.bootstrap is not None:
       result["boot"] = self.bootstrap
     return result
@@ -397,10 +400,23 @@ def group_traditional_metric_value(
   """Compute one conventional unadjusted metric for one group and threshold."""
   y = group_df["_response"].astype(float)
   high_risk = group_df["_high_risk"]
+  low_risk = 1.0 - high_risk
+  risk = group_df["_risk"].astype(float)
   if metric == MetricName.ATPR:
     return safe_divide(float(np.mean(y * high_risk)), float(np.mean(y)))
+  if metric == MetricName.AFPR:
+    y_negative = 1.0 - y
+    return safe_divide(float(np.mean(y_negative * high_risk)), float(np.mean(y_negative)))
   if metric == MetricName.APPV:
     return safe_divide(float(np.mean(y * high_risk)), float(np.mean(high_risk)))
+  if metric == MetricName.ANPV:
+    y_negative = 1.0 - y
+    return safe_divide(float(np.mean(y_negative * low_risk)), float(np.mean(low_risk)))
+  if metric == MetricName.ABSP:
+    return safe_divide(float(np.mean(risk * y)), float(np.mean(y)))
+  if metric == MetricName.ABSN:
+    y_negative = 1.0 - y
+    return safe_divide(float(np.mean(risk * y_negative)), float(np.mean(y_negative)))
   if metric == MetricName.ANB:
     benefit = np.mean(high_risk * y)
     harm = np.mean(high_risk * (1.0 - y)) * tau / (1.0 - tau)
@@ -412,16 +428,41 @@ def group_metric_value(group_df: pd.DataFrame, metric: MetricName, tau: float) -
   """Compute one adjusted metric for one group and threshold."""
   y_hat = group_df["cal_risk"]
   high_risk = group_df["_high_risk"]
+  low_risk = 1.0 - high_risk
   weight = group_df["dens_ratio"]
+  risk = group_df["_risk"].astype(float)
   if metric == MetricName.ATPR:
     return safe_divide(
       float(np.mean(y_hat * high_risk * weight)),
       float(np.mean(y_hat * weight)),
     )
+  if metric == MetricName.AFPR:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(
+      float(np.mean(y_negative_hat * high_risk * weight)),
+      float(np.mean(y_negative_hat * weight)),
+    )
   if metric == MetricName.APPV:
     return safe_divide(
       float(np.mean(y_hat * high_risk * weight)),
       float(np.mean(high_risk * weight)),
+    )
+  if metric == MetricName.ANPV:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(
+      float(np.mean(y_negative_hat * low_risk * weight)),
+      float(np.mean(low_risk * weight)),
+    )
+  if metric == MetricName.ABSP:
+    return safe_divide(
+      float(np.mean(risk * y_hat * weight)),
+      float(np.mean(y_hat * weight)),
+    )
+  if metric == MetricName.ABSN:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(
+      float(np.mean(risk * y_negative_hat * weight)),
+      float(np.mean(y_negative_hat * weight)),
     )
   if metric == MetricName.ANB:
     benefit = np.mean(high_risk * y_hat * weight)
@@ -442,6 +483,7 @@ def metric_frame_at_threshold(
   """Compute conventional and adjusted metric values for all groups at a threshold."""
   with_indicator = df.copy()
   with_indicator["_response"] = with_indicator[response_col].astype(float)
+  with_indicator["_risk"] = with_indicator[risk_col].astype(float)
   with_indicator["_high_risk"] = high_risk_indicator(
     with_indicator[risk_col].to_numpy(dtype=float),
     tau,
@@ -497,6 +539,118 @@ def metric_frame_across_quantiles(
   return pd.concat(frames, ignore_index=True)
 
 
+def metric_frame_across_thresholds(
+  df: pd.DataFrame,
+  group_col: str,
+  risk_col: str,
+  response_col: str,
+  metric: MetricName,
+  thresholds: tuple[float, ...],
+) -> pd.DataFrame:
+  """Compute a metric for every requested fixed threshold."""
+  frames = [
+    metric_frame_at_threshold(
+      df,
+      group_col,
+      risk_col,
+      response_col,
+      metric,
+      float("nan"),
+      threshold,
+    )
+    for threshold in thresholds
+  ]
+  return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def metric_frame_across_cutoffs(
+  df: pd.DataFrame,
+  group_col: str,
+  risk_col: str,
+  response_col: str,
+  metric: MetricName,
+  quantiles: tuple[float, ...],
+  thresholds: tuple[float, ...],
+  quantiles_from: QuantilesFrom | None,
+) -> pd.DataFrame:
+  """Compute a metric for requested quantile and fixed-threshold cutoffs."""
+  frames = []
+  if quantiles:
+    frames.append(
+      metric_frame_across_quantiles(
+        df,
+        group_col,
+        risk_col,
+        response_col,
+        metric,
+        quantiles,
+        quantiles_from,
+      )
+    )
+  if thresholds:
+    frames.append(
+      metric_frame_across_thresholds(
+        df,
+        group_col,
+        risk_col,
+        response_col,
+        metric,
+        thresholds,
+      )
+    )
+  return pd.concat(frames, ignore_index=True)
+
+
+def build_pairwise_delta_frame(
+  metrics: dict[str, pd.DataFrame],
+  group_col: str,
+  ref_group: Any,
+) -> pd.DataFrame:
+  """Build optional reference-vs-comparison deltas from metric frames."""
+  records: list[dict[str, Any]] = []
+  for adjusted_name, frame in metrics.items():
+    metric = MetricName(adjusted_name)
+    original_name = traditional_metric_name(metric)
+    for (_, tau), cutoff_df in frame.groupby(["quantile", "tau"], dropna=False, sort=False):
+      reference_rows = cutoff_df[cutoff_df[group_col] == ref_group]
+      if reference_rows.empty:
+        continue
+      reference_row = reference_rows.iloc[0]
+      reference_value = float(reference_row[original_name])
+      for _, row in cutoff_df[cutoff_df[group_col] != ref_group].iterrows():
+        comparison_value = float(row[original_name])
+        adjusted_comparison_value = float(row[adjusted_name])
+        records.append(
+          {
+            "metric": adjusted_name,
+            group_col: row[group_col],
+            "reference_group": ref_group,
+            "quantile": row["quantile"],
+            "tau": tau,
+            "reference_value": reference_value,
+            "comparison_value": comparison_value,
+            "adjusted_comparison_value": adjusted_comparison_value,
+            "delta": comparison_value - reference_value,
+            "adjusted_delta": adjusted_comparison_value - reference_value,
+          }
+        )
+  return pd.DataFrame.from_records(
+    records,
+    columns=[
+      "metric",
+      group_col,
+      "reference_group",
+      "quantile",
+      "tau",
+      "reference_value",
+      "comparison_value",
+      "adjusted_comparison_value",
+      "delta",
+      "adjusted_delta",
+    ],
+  )
+
+
 def stratified_bootstrap_sample(
   df: pd.DataFrame,
   group_col: str,
@@ -541,8 +695,12 @@ def bootstrap_records(
       seed,
     )
     mask = resolve_bootstrap_quantile_mask(dr.data, quantiles_from)
-    for quantile in config.quantiles:
-      tau = threshold_for_quantile(dr.data, config.columns.risk, quantile, mask)
+    quantile_cutoffs = [
+      (quantile, threshold_for_quantile(dr.data, config.columns.risk, quantile, mask))
+      for quantile in config.quantiles
+    ]
+    threshold_cutoffs = [(float("nan"), threshold) for threshold in config.thresholds]
+    for quantile, tau in [*quantile_cutoffs, *threshold_cutoffs]:
       for metric in config.metrics:
         metric_df = metric_frame_at_threshold(
           dr.data,
@@ -641,17 +799,23 @@ def run_metric_pipeline(
   )
   persist_stage_outputs(config, cal, dr)
   metrics = {
-    metric.value: metric_frame_across_quantiles(
+    metric.value: metric_frame_across_cutoffs(
       dr.data,
       config.columns.group,
       config.columns.risk,
       config.columns.response,
       metric,
       config.quantiles,
+      config.thresholds,
       quantiles_from,
     )
     for metric in config.metrics
   }
+  pairwise = (
+    build_pairwise_delta_frame(metrics, config.columns.group, config.ref_group)
+    if config.pairwise
+    else None
+  )
   boot_df = None
   if config.bootstrap.enabled:
     boot_df = bootstrap_records(clean_df, config, quantiles_from, config.bootstrap)
@@ -666,7 +830,7 @@ def run_metric_pipeline(
       for metric in config.metrics
     }
   return PipelineFrames(
-    metrics=MetricFrames(metrics=metrics, bootstrap=boot_df),
+    metrics=MetricFrames(metrics=metrics, pairwise=pairwise, bootstrap=boot_df),
     calibrated=cal.data,
     weighted=dr.data,
   )
@@ -682,6 +846,7 @@ def attach_pipeline_intermediates(
     return result
   return MetricFrames(
     metrics=result.metrics,
+    pairwise=result.pairwise,
     bootstrap=result.bootstrap,
     calibrated=pipeline.calibrated,
     weighted=pipeline.weighted,

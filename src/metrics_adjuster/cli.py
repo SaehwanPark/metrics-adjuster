@@ -29,6 +29,13 @@ def parse_quantiles(value: str) -> tuple[float, ...]:
   return tuple(float(item.strip()) for item in value.split(",") if item.strip())
 
 
+def parse_thresholds(value: str | None) -> tuple[float, ...]:
+  """Parse optional comma-separated fixed thresholds."""
+  if value is None:
+    return ()
+  return tuple(float(item.strip()) for item in value.split(",") if item.strip())
+
+
 def parse_metrics(value: str) -> tuple[MetricName, ...]:
   """Parse comma-separated metric names."""
   return tuple(MetricName(item.strip()) for item in value.split(",") if item.strip())
@@ -127,7 +134,9 @@ def build_run_config(
     ),
     ref_group=resolve_reference_group(args.ref_group, df[args.group_col]),
     quantiles=parse_quantiles(args.quantiles),
+    thresholds=parse_thresholds(args.thresholds),
     metrics=parse_metrics(args.metrics),
+    pairwise=args.pairwise_deltas,
     calibration=CalibrationConfig(degree=args.cal_degree, cv=args.cv),
     density_ratio=DensityRatioConfig(degree=args.dr_degree, cv=args.cv),
     bootstrap=BootstrapConfig(enabled=args.bootstrap, iterations=args.n_boot),
@@ -209,7 +218,17 @@ def build_parser() -> argparse.ArgumentParser:
   run.add_argument("--risk-col", required=True)
   run.add_argument("--id-col")
   run.add_argument("--quantiles", default="0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9")
+  run.add_argument(
+    "--thresholds",
+    default=None,
+    help="comma-separated fixed risk thresholds to evaluate in addition to quantiles",
+  )
   run.add_argument("--metrics", default="aTPR")
+  run.add_argument(
+    "--pairwise-deltas",
+    action="store_true",
+    help="write pairwise.csv with reference-vs-comparison deltas",
+  )
   run.add_argument("--cal-degree", type=int, default=2)
   run.add_argument("--dr-degree", type=int, default=1)
   run.add_argument("--cv", action="store_true")
@@ -262,6 +281,8 @@ def run_command(args: argparse.Namespace) -> None:
   else:
     result = adjusted_metrics(df, config)
   write_metric_outputs(result.metrics, args.output_dir)
+  if result.pairwise is not None:
+    result.pairwise.to_csv(args.output_dir / "pairwise.csv", index=False)
   if result.bootstrap is not None:
     result.bootstrap.to_csv(args.output_dir / "bootstrap.csv", index=False)
 

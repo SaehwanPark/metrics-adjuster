@@ -13,9 +13,22 @@ class MetricName(StrEnum):
   """Supported adjusted metrics."""
 
   ATPR = "aTPR"
+  AFPR = "aFPR"
   APPV = "aPPV"
+  ANPV = "aNPV"
+  ABSP = "aBSP"
+  ABSN = "aBSN"
+  ASP = "aSP"
   ANB = "aNB"
   AHR = "aHR"
+
+
+DEFAULT_METRICS: tuple[MetricName, ...] = (
+  MetricName.ATPR,
+  MetricName.APPV,
+  MetricName.ANB,
+  MetricName.AHR,
+)
 
 
 class ColumnSpec(BaseModel):
@@ -107,7 +120,9 @@ class MetricConfig(BaseModel):
   columns: ColumnSpec
   ref_group: Any
   quantiles: tuple[float, ...]
-  metrics: tuple[MetricName, ...] = tuple(MetricName)
+  thresholds: tuple[float, ...] = ()
+  metrics: tuple[MetricName, ...] = DEFAULT_METRICS
+  pairwise: bool = False
   calibration: CalibrationConfig = CalibrationConfig()
   density_ratio: DensityRatioConfig = DensityRatioConfig()
   bootstrap: BootstrapConfig = BootstrapConfig()
@@ -117,20 +132,28 @@ class MetricConfig(BaseModel):
   @field_validator("quantiles")
   @classmethod
   def validate_quantiles(cls, quantiles: tuple[float, ...]) -> tuple[float, ...]:
-    if not quantiles:
-      raise ValueError("at least one quantile is required")
     invalid = [q for q in quantiles if q <= 0.0 or q >= 1.0]
     if invalid:
       raise ValueError("quantiles must be strictly between 0 and 1")
     return quantiles
 
+  @field_validator("thresholds")
+  @classmethod
+  def validate_thresholds(cls, thresholds: tuple[float, ...]) -> tuple[float, ...]:
+    invalid = [threshold for threshold in thresholds if threshold < 0.0 or threshold >= 1.0]
+    if invalid:
+      raise ValueError("thresholds must be greater than or equal to 0 and less than 1")
+    return thresholds
+
   @field_validator("metrics", mode="before")
   @classmethod
   def coerce_metrics(cls, metrics: Any) -> tuple[MetricName, ...]:
     if metrics is None:
-      return tuple(MetricName)
+      return DEFAULT_METRICS
     return tuple(MetricName(metric) for metric in metrics)
 
   @model_validator(mode="after")
-  def validate_bootstrap_cv(self) -> MetricConfig:
+  def validate_cutoffs(self) -> MetricConfig:
+    if not self.quantiles and not self.thresholds:
+      raise ValueError("at least one quantile or threshold is required")
     return self

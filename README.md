@@ -94,6 +94,18 @@ For reports and standalone figures, use `adjusted_metrics_report(...)` and
 - [R CLI guide](docs/R_CLI_GUIDE.md)
 - [Contributing](CONTRIBUTING.md)
 
+## Citation
+
+If you use `metrics-adjuster` in published work, cite it as:
+
+APA:
+
+Park, S. (2026). _metrics-adjuster_ (Version 1.1.0) [Computer software]. GitHub. https://github.com/SaehwanPark/metrics-adjuster
+
+AMA:
+
+Park S. metrics-adjuster [computer program]. Version 1.1.0. Published 2026. Accessed June 24, 2026. https://github.com/SaehwanPark/metrics-adjuster
+
 ## License
 
 `metrics-adjuster` is distributed under the GNU General Public License v3.0.
