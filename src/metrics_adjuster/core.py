@@ -392,6 +392,11 @@ def traditional_metric_name(metric: MetricName) -> str:
   return metric.value[1:]
 
 
+def calibrated_metric_name(metric: MetricName) -> str:
+  """Return the calibrated-unweighted companion name for an adjusted metric."""
+  return f"c{traditional_metric_name(metric)}"
+
+
 def group_traditional_metric_value(
   group_df: pd.DataFrame,
   metric: MetricName,
@@ -420,6 +425,41 @@ def group_traditional_metric_value(
   if metric == MetricName.ANB:
     benefit = np.mean(high_risk * y)
     harm = np.mean(high_risk * (1.0 - y)) * tau / (1.0 - tau)
+    return float(benefit - harm)
+  return float(np.mean(high_risk))
+
+
+def group_calibrated_metric_value(
+  group_df: pd.DataFrame,
+  metric: MetricName,
+  tau: float,
+) -> float:
+  """Compute one calibrated-unweighted metric for one group and threshold."""
+  y_hat = group_df["cal_risk"]
+  high_risk = group_df["_high_risk"]
+  low_risk = 1.0 - high_risk
+  risk = group_df["_risk"].astype(float)
+  if metric == MetricName.ATPR:
+    return safe_divide(float(np.mean(y_hat * high_risk)), float(np.mean(y_hat)))
+  if metric == MetricName.AFPR:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(
+      float(np.mean(y_negative_hat * high_risk)),
+      float(np.mean(y_negative_hat)),
+    )
+  if metric == MetricName.APPV:
+    return safe_divide(float(np.mean(y_hat * high_risk)), float(np.mean(high_risk)))
+  if metric == MetricName.ANPV:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(float(np.mean(y_negative_hat * low_risk)), float(np.mean(low_risk)))
+  if metric == MetricName.ABSP:
+    return safe_divide(float(np.mean(risk * y_hat)), float(np.mean(y_hat)))
+  if metric == MetricName.ABSN:
+    y_negative_hat = 1.0 - y_hat
+    return safe_divide(float(np.mean(risk * y_negative_hat)), float(np.mean(y_negative_hat)))
+  if metric == MetricName.ANB:
+    benefit = np.mean(high_risk * y_hat)
+    harm = np.mean(high_risk * (1.0 - y_hat)) * tau / (1.0 - tau)
     return float(benefit - harm)
   return float(np.mean(high_risk))
 
@@ -465,10 +505,48 @@ def group_metric_value(group_df: pd.DataFrame, metric: MetricName, tau: float) -
       float(np.mean(y_negative_hat * weight)),
     )
   if metric == MetricName.ANB:
-    benefit = np.mean(high_risk * y_hat * weight)
-    harm = np.mean(high_risk * (1.0 - y_hat) * weight) * tau / (1.0 - tau)
-    return safe_divide(float(benefit - harm), float(np.mean(weight)))
+    raise ValueError("aNB is the plug-in of aTPR, aFPR, and reference prevalence")
   return weighted_mean(high_risk, weight)
+
+
+def plug_in_adjusted_net_benefit(
+  atpr: float,
+  afpr: float,
+  mu0: float,
+  tau: float,
+) -> float:
+  """Return aNB from adjusted rates and common reference prevalence."""
+  odds = tau / (1.0 - tau)
+  return atpr * mu0 - afpr * (1.0 - mu0) * odds
+
+
+def group_adjusted_metric_value(
+  group_df: pd.DataFrame,
+  metric: MetricName,
+  tau: float,
+  mu0: float | None,
+) -> float:
+  """Compute one adjusted metric, using the aNB plug-in when requested."""
+  if metric != MetricName.ANB:
+    return group_metric_value(group_df, metric, tau)
+  if mu0 is None:
+    raise ValueError("ref_group is required for aNB")
+  atpr = group_metric_value(group_df, MetricName.ATPR, tau)
+  afpr = group_metric_value(group_df, MetricName.AFPR, tau)
+  return plug_in_adjusted_net_benefit(atpr, afpr, mu0, tau)
+
+
+def reference_prevalence(
+  df: pd.DataFrame,
+  group_col: str,
+  response_col: str,
+  ref_group: Any,
+) -> float:
+  """Return observed outcome prevalence in the reference subgroup."""
+  reference = df[df[group_col] == ref_group]
+  if reference.empty:
+    raise ValueError(f"reference group {ref_group!r} is absent from {group_col!r}")
+  return float(reference[response_col].astype(float).mean())
 
 
 def metric_frame_at_threshold(
@@ -479,6 +557,9 @@ def metric_frame_at_threshold(
   metric: MetricName,
   quantile: float,
   tau: float,
+  *,
+  include_calibrated_metrics: bool = False,
+  ref_group: Any | None = None,
 ) -> pd.DataFrame:
   """Compute conventional and adjusted metric values for all groups at a threshold."""
   with_indicator = df.copy()
@@ -489,16 +570,33 @@ def metric_frame_at_threshold(
     tau,
   )
   unadjusted_name = traditional_metric_name(metric)
-  records = [
-    {
+  calibrated_name = calibrated_metric_name(metric)
+  if metric == MetricName.ANB:
+    if ref_group is None:
+      raise ValueError("ref_group is required for aNB")
+    mu0 = reference_prevalence(with_indicator, group_col, "_response", ref_group)
+  else:
+    mu0 = None
+  records = []
+  for group_id, group_df in with_indicator.groupby(group_col, sort=True):
+    record = {
       group_col: group_id,
       "quantile": quantile,
       "tau": tau,
       unadjusted_name: group_traditional_metric_value(group_df, metric, tau),
-      metric.value: group_metric_value(group_df, metric, tau),
+      metric.value: group_adjusted_metric_value(group_df, metric, tau, mu0),
     }
-    for group_id, group_df in with_indicator.groupby(group_col, sort=True)
-  ]
+    if include_calibrated_metrics:
+      record[calibrated_name] = group_calibrated_metric_value(group_df, metric, tau)
+      record = {
+        group_col: record[group_col],
+        "quantile": record["quantile"],
+        "tau": record["tau"],
+        unadjusted_name: record[unadjusted_name],
+        calibrated_name: record[calibrated_name],
+        metric.value: record[metric.value],
+      }
+    records.append(record)
   return pd.DataFrame.from_records(records)
 
 
@@ -521,6 +619,9 @@ def metric_frame_across_quantiles(
   metric: MetricName,
   quantiles: tuple[float, ...],
   quantiles_from: QuantilesFrom | None,
+  *,
+  include_calibrated_metrics: bool = False,
+  ref_group: Any | None = None,
 ) -> pd.DataFrame:
   """Compute a metric for every requested quantile."""
   mask = resolve_quantile_mask(df, quantiles_from)
@@ -533,6 +634,8 @@ def metric_frame_across_quantiles(
       metric,
       quantile,
       threshold_for_quantile(df, risk_col, quantile, mask),
+      include_calibrated_metrics=include_calibrated_metrics,
+      ref_group=ref_group,
     )
     for quantile in quantiles
   ]
@@ -546,6 +649,9 @@ def metric_frame_across_thresholds(
   response_col: str,
   metric: MetricName,
   thresholds: tuple[float, ...],
+  *,
+  include_calibrated_metrics: bool = False,
+  ref_group: Any | None = None,
 ) -> pd.DataFrame:
   """Compute a metric for every requested fixed threshold."""
   frames = [
@@ -557,6 +663,8 @@ def metric_frame_across_thresholds(
       metric,
       float("nan"),
       threshold,
+      include_calibrated_metrics=include_calibrated_metrics,
+      ref_group=ref_group,
     )
     for threshold in thresholds
   ]
@@ -572,6 +680,9 @@ def metric_frame_across_cutoffs(
   quantiles: tuple[float, ...],
   thresholds: tuple[float, ...],
   quantiles_from: QuantilesFrom | None,
+  *,
+  include_calibrated_metrics: bool = False,
+  ref_group: Any | None = None,
 ) -> pd.DataFrame:
   """Compute a metric for requested quantile and fixed-threshold cutoffs."""
   frames = []
@@ -585,6 +696,8 @@ def metric_frame_across_cutoffs(
         metric,
         quantiles,
         quantiles_from,
+        include_calibrated_metrics=include_calibrated_metrics,
+        ref_group=ref_group,
       )
     )
   if thresholds:
@@ -596,6 +709,8 @@ def metric_frame_across_cutoffs(
         response_col,
         metric,
         thresholds,
+        include_calibrated_metrics=include_calibrated_metrics,
+        ref_group=ref_group,
       )
     )
   return pd.concat(frames, ignore_index=True)
@@ -608,9 +723,13 @@ def build_pairwise_delta_frame(
 ) -> pd.DataFrame:
   """Build optional reference-vs-comparison deltas from metric frames."""
   records: list[dict[str, Any]] = []
+  include_calibrated = False
   for adjusted_name, frame in metrics.items():
     metric = MetricName(adjusted_name)
     original_name = traditional_metric_name(metric)
+    calibrated_name = calibrated_metric_name(metric)
+    has_calibrated = calibrated_name in frame.columns
+    include_calibrated = include_calibrated or has_calibrated
     for (_, tau), cutoff_df in frame.groupby(["quantile", "tau"], dropna=False, sort=False):
       reference_rows = cutoff_df[cutoff_df[group_col] == ref_group]
       if reference_rows.empty:
@@ -620,35 +739,39 @@ def build_pairwise_delta_frame(
       for _, row in cutoff_df[cutoff_df[group_col] != ref_group].iterrows():
         comparison_value = float(row[original_name])
         adjusted_comparison_value = float(row[adjusted_name])
-        records.append(
-          {
-            "metric": adjusted_name,
-            group_col: row[group_col],
-            "reference_group": ref_group,
-            "quantile": row["quantile"],
-            "tau": tau,
-            "reference_value": reference_value,
-            "comparison_value": comparison_value,
-            "adjusted_comparison_value": adjusted_comparison_value,
-            "delta": comparison_value - reference_value,
-            "adjusted_delta": adjusted_comparison_value - reference_value,
-          }
-        )
-  return pd.DataFrame.from_records(
-    records,
-    columns=[
-      "metric",
-      group_col,
-      "reference_group",
-      "quantile",
-      "tau",
-      "reference_value",
-      "comparison_value",
-      "adjusted_comparison_value",
-      "delta",
-      "adjusted_delta",
-    ],
-  )
+        record = {
+          "metric": adjusted_name,
+          group_col: row[group_col],
+          "reference_group": ref_group,
+          "quantile": row["quantile"],
+          "tau": tau,
+          "reference_value": reference_value,
+          "comparison_value": comparison_value,
+          "adjusted_comparison_value": adjusted_comparison_value,
+          "delta": comparison_value - reference_value,
+          "adjusted_delta": adjusted_comparison_value - reference_value,
+        }
+        if has_calibrated:
+          calibrated_comparison_value = float(row[calibrated_name])
+          record["calibrated_comparison_value"] = calibrated_comparison_value
+          record["calibrated_delta"] = calibrated_comparison_value - reference_value
+        records.append(record)
+  columns = [
+    "metric",
+    group_col,
+    "reference_group",
+    "quantile",
+    "tau",
+    "reference_value",
+    "comparison_value",
+    "adjusted_comparison_value",
+    "delta",
+    "adjusted_delta",
+  ]
+  if include_calibrated:
+    columns.insert(8, "calibrated_comparison_value")
+    columns.append("calibrated_delta")
+  return pd.DataFrame.from_records(records, columns=columns)
 
 
 def stratified_bootstrap_sample(
@@ -710,9 +833,11 @@ def bootstrap_records(
           metric,
           quantile,
           tau,
+          include_calibrated_metrics=config.include_calibrated_metrics,
+          ref_group=config.ref_group,
         )
-        records.extend(
-          {
+        for _, row in metric_df.iterrows():
+          record = {
             "metric": metric.value,
             config.columns.group: row[config.columns.group],
             "quantile": quantile,
@@ -721,8 +846,9 @@ def bootstrap_records(
             "adjusted_value": row[metric.value],
             "value": row[metric.value],
           }
-          for _, row in metric_df.iterrows()
-        )
+          if config.include_calibrated_metrics:
+            record["calibrated_value"] = row[calibrated_metric_name(metric)]
+          records.append(record)
   return pd.DataFrame.from_records(records)
 
 
@@ -808,6 +934,8 @@ def run_metric_pipeline(
       config.quantiles,
       config.thresholds,
       quantiles_from,
+      include_calibrated_metrics=config.include_calibrated_metrics,
+      ref_group=config.ref_group,
     )
     for metric in config.metrics
   }

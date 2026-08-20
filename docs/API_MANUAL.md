@@ -39,6 +39,7 @@ from metrics_adjuster import (
   BootstrapConfig,
   CalibrationConfig,
   ColumnSpec,
+  DecisionCurveConfig,
   DensityRatioConfig,
   MetricConfig,
   MetricName,
@@ -89,17 +90,17 @@ columns = ColumnSpec(
 
 Supported adjusted metric names are:
 
-| Enum | Value | Conventional companion |
-| --- | --- | --- |
-| `MetricName.ATPR` | `aTPR` | `TPR` |
-| `MetricName.AFPR` | `aFPR` | `FPR` |
-| `MetricName.APPV` | `aPPV` | `PPV` |
-| `MetricName.ANPV` | `aNPV` | `NPV` |
-| `MetricName.ABSP` | `aBSP` | `BSP` |
-| `MetricName.ABSN` | `aBSN` | `BSN` |
-| `MetricName.ASP` | `aSP` | `SP` |
-| `MetricName.ANB` | `aNB` | `NB` |
-| `MetricName.AHR` | `aHR` | `HR` |
+| Enum | Value | Conventional companion | Optional calibrated companion |
+| --- | --- | --- | --- |
+| `MetricName.ATPR` | `aTPR` | `TPR` | `cTPR` |
+| `MetricName.AFPR` | `aFPR` | `FPR` | `cFPR` |
+| `MetricName.APPV` | `aPPV` | `PPV` | `cPPV` |
+| `MetricName.ANPV` | `aNPV` | `NPV` | `cNPV` |
+| `MetricName.ABSP` | `aBSP` | `BSP` | `cBSP` |
+| `MetricName.ABSN` | `aBSN` | `BSN` | `cBSN` |
+| `MetricName.ASP` | `aSP` | `SP` | `cSP` |
+| `MetricName.ANB` | `aNB` | `NB` | `cNB` |
+| `MetricName.AHR` | `aHR` | `HR` | `cHR` |
 
 ### `CalibrationConfig`
 
@@ -181,6 +182,28 @@ intermediates are independent options.
 
 These outputs are written at the API boundary. The core metric outputs are still returned in memory.
 
+### `DecisionCurveConfig`
+
+Controls report decision curve analysis:
+
+```python
+decision_curve = DecisionCurveConfig(
+  enabled=True,
+  threshold_min=0.01,
+  threshold_max=0.30,
+  threshold_points=60,
+  facet_max_cols=3,
+  write_csv_artifact=True,
+  plots={
+    "standard_subgroup": True,
+    "comparative_model_utility": True,
+  },
+)
+```
+
+Thresholds must be strictly between `0` and `1`, and `threshold_min` must be
+less than `threshold_max`.
+
 ### `MetricConfig`
 
 Top-level config:
@@ -191,6 +214,7 @@ config = MetricConfig(
   ref_group="ref",
   quantiles=(0.2, 0.4, 0.6, 0.8),
   metrics=(MetricName.ATPR, MetricName.APPV, MetricName.ANB, MetricName.AHR),
+  include_calibrated_metrics=False,
   calibration=calibration,
   density_ratio=density_ratio,
   bootstrap=bootstrap,
@@ -200,6 +224,8 @@ config = MetricConfig(
 ```
 
 `quantiles` must be strictly between 0 and 1. A quantile determines the risk threshold `tau` used to flag high-risk rows with `risk > tau`.
+Set `include_calibrated_metrics=True` to include calibrated-unweighted `c*`
+columns between the conventional and adjusted metric columns.
 
 ## Main API: `adjusted_metrics(...)`
 
@@ -246,7 +272,12 @@ Use `adjusted_metrics_report(...)` when you want a polished end-user artifact
 instead of only machine-readable metric tables:
 
 ```python
-from metrics_adjuster import ReportConfig, ReportLabelConfig, adjusted_metrics_report
+from metrics_adjuster import (
+  DecisionCurveConfig,
+  ReportConfig,
+  ReportLabelConfig,
+  adjusted_metrics_report,
+)
 
 bundle = adjusted_metrics_report(
   frame,
@@ -254,6 +285,17 @@ bundle = adjusted_metrics_report(
   ReportConfig(
     title="Adjusted metrics report",
     x_scale="log_odds",
+    decision_curve=DecisionCurveConfig(
+      enabled=True,
+      threshold_min=0.01,
+      threshold_max=0.30,
+      threshold_points=60,
+      facet_max_cols=3,
+      plots={
+        "standard_subgroup": True,
+        "comparative_model_utility": True,
+      },
+    ),
     labels=ReportLabelConfig(
       columns={"group": "Cohort group"},
       groups={"group": {"ref": "Reference group"}},
@@ -267,6 +309,10 @@ bundle.html                 # self-contained HTML string
 bundle.metric_table         # pandas.DataFrame
 bundle.density_figure       # matplotlib.figure.Figure
 bundle.weight_ratio_figure  # matplotlib.figure.Figure
+bundle.decision_curve_table # pandas.DataFrame | None
+bundle.decision_curve_standard_subgroup_figure  # matplotlib.figure.Figure | None
+bundle.decision_curve_comparative_model_utility_figure  # matplotlib.figure.Figure | None
+bundle.decision_curve_figure  # backward-compatible alias to comparative figure
 bundle.metrics              # MetricFrames used to build the report
 ```
 
@@ -278,6 +324,10 @@ original_ci_lower,original_ci_upper,adjusted_metric,adjusted_value,
 adjusted_ci_lower,adjusted_ci_upper,n_boot
 ```
 
+With calibrated metrics enabled, `calibrated_metric`, `calibrated_value`,
+`calibrated_ci_lower`, and `calibrated_ci_upper` appear between the original
+and adjusted fields.
+
 Confidence interval fields are populated from bootstrap records when
 `BootstrapConfig(enabled=True, ...)` is used. Without bootstrap, the CI fields
 remain present and render as unavailable in HTML.
@@ -287,6 +337,13 @@ Individual component functions are also exported for custom workflows:
 - `metric_comparison_table(...)`
 - `calibrated_density_figure(...)`
 - `weight_ratio_figure(...)`
+- `decision_curve_table(...)`
+- `decision_curve_standard_subgroup_figure(...)`
+- `decision_curve_comparative_model_utility_figure(...)`
+- `decision_curve_figure(...)`
+- `write_decision_curve_csv(...)`
+- `write_decision_curve_figure(...)`
+- `write_decision_curve_figures(...)`
 - `render_report_html(...)`
 - `write_report_figures(...)`
 
@@ -295,7 +352,36 @@ can use calibrated probability or calibrated log-odds on the x-axis through
 `ReportConfig.x_scale`. Figure 2 shows each group density divided by the
 reference-group density, so the reference group appears at 1.0. When many
 quantiles are requested, cutoff reference lines are capped by
-`ReportConfig.max_cutoff_lines`.
+`ReportConfig.max_cutoff_lines`. DCA plots use
+`ReportConfig.decision_curve` thresholds and can be rendered as:
+- Decision curves by subgroup with original/adjusted net benefit, subgroup
+  treat-all, and treat-none.
+- Model net benefit by subgroup with subgroup model curves overlaid and compared
+  separately for original and adjusted net benefit.
+
+In report DCA, all model curve families use the original model score
+`g(X)` as the decision rule `g(X) > threshold`. The conventional/original
+family still uses observed outcomes without density-ratio weighting. When
+`include_calibrated_metrics=True`, reports add a calibrated family that uses
+calibrated risk without density-ratio weighting. The adjusted family is the
+plug-in of adjusted TPR, adjusted FPR, and the observed reference-group
+prevalence. Adjusted treat-all uses that same common reference prevalence for
+every subgroup.
+
+The DCA threshold is a threshold probability, not prevalence. Prevalence enters
+only through treat-all reference curves. This produces a three-way net-benefit
+decomposition: `NB` is empirical net benefit in the actual group distribution,
+`cNB` is calibration-smoothed net benefit in the actual group distribution, and
+`aNB` is reference-standardized adjusted net benefit.
+For the statistical definitions, see
+[Decision Curve Analysis Definitions](adjusted-dca.md) and
+[Adjusted Net Benefit: Derivation and Estimation](adjusted-net-benefit.md).
+
+When one DCA plot is disabled, report figure numbering remains continuous
+(the remaining DCA panel becomes Figure 3). Disable all DCA plots with
+`ReportConfig(decision_curve=DecisionCurveConfig(enabled=False))`.
+Set `DecisionCurveConfig(write_csv_artifact=False)` to suppress the default
+`decision_curve_table.csv` export in CLI report runs.
 
 ## Output frame schema
 
@@ -342,6 +428,21 @@ The conventional metrics use observed outcomes and no density-ratio weights:
 | `NB` | `mean(high_risk * outcome) - mean(high_risk * (1 - outcome)) * tau / (1 - tau)` |
 | `HR` | `mean(high_risk)` |
 
+When `MetricConfig.include_calibrated_metrics=True`, calibrated companions use
+calibrated risk (`cal_risk`) without density-ratio weights:
+
+| Metric | Definition |
+| --- | --- |
+| `cTPR` | `mean(cal_risk * high_risk) / mean(cal_risk)` |
+| `cFPR` | `mean((1 - cal_risk) * high_risk) / mean(1 - cal_risk)` |
+| `cPPV` | `mean(cal_risk * high_risk) / mean(high_risk)` |
+| `cNPV` | `mean((1 - cal_risk) * low_risk) / mean(low_risk)` |
+| `cBSP` | `mean(risk * cal_risk) / mean(cal_risk)` |
+| `cBSN` | `mean(risk * (1 - cal_risk)) / mean(1 - cal_risk)` |
+| `cSP` | `mean(high_risk)` |
+| `cNB` | `mean(high_risk * cal_risk) - mean(high_risk * (1 - cal_risk)) * tau / (1 - tau)` |
+| `cHR` | `mean(high_risk)` |
+
 The adjusted metrics use calibrated risk (`cal_risk`) and density ratios (`dens_ratio`):
 
 | Metric | Definition |
@@ -353,10 +454,14 @@ The adjusted metrics use calibrated risk (`cal_risk`) and density ratios (`dens_
 | `aBSP` | `mean(risk * cal_risk * dens_ratio) / mean(cal_risk * dens_ratio)` |
 | `aBSN` | `mean(risk * (1 - cal_risk) * dens_ratio) / mean((1 - cal_risk) * dens_ratio)` |
 | `aSP` | `mean(high_risk * dens_ratio) / mean(dens_ratio)` |
-| `aNB` | `(mean(high_risk * cal_risk * dens_ratio) - mean(high_risk * (1 - cal_risk) * dens_ratio) * tau / (1 - tau)) / mean(dens_ratio)` |
+| `aNB` | `aTPR * mu0 - aFPR * (1 - mu0) * tau / (1 - tau)`, where `mu0` is observed outcome prevalence in the reference group |
 | `aHR` | `mean(high_risk * dens_ratio) / mean(dens_ratio)` |
 
 Undefined ratios return `NaN` rather than raising during metric computation.
+For report DCA, `tau` is the threshold probability used both in
+`risk > tau` and in the utility ratio `tau / (1 - tau)`.
+`decision_curve_table(..., ref_group=...)` requires the same reference group
+used to estimate density ratios.
 
 ## Fixed Thresholds And Pairwise Deltas
 
@@ -377,6 +482,8 @@ config = MetricConfig(
 When `pairwise=True`, `result.pairwise` contains `metric`, the configured group
 column, `reference_group`, `quantile`, `tau`, `reference_value`,
 `comparison_value`, `adjusted_comparison_value`, `delta`, and `adjusted_delta`.
+With calibrated metrics enabled, it also includes
+`calibrated_comparison_value` and `calibrated_delta`.
 
 ## Quantile source masks
 

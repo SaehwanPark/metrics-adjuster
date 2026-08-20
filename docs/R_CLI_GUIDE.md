@@ -4,6 +4,19 @@ This guide shows how R users can call the `metrics-adjuster` CLI from an R
 session and read the outputs back into R. The package itself is Python; R
 invokes it as an external command.
 
+## Relationship to `fairRisk`
+
+Sarah E. Hegarty's [`fairRisk`](https://github.com/sarahhegarty/fairRisk)
+package is the original R implementation of the aTPR methodology developed in
+research led by Hegarty and Jinbo Chen. `metrics-adjuster` grew from Sae-Hwan
+Park's internally validated Python rewrite used for additional VA analyses; the
+rewrite was reviewed and approved by Hegarty for the team's analysis.
+
+Use `fairRisk` when the original native R implementation is the appropriate
+interface. This guide is for R workflows that intentionally need to invoke the
+separate `metrics-adjuster` Python CLI. Cite the research method and software
+implementation or implementations actually used.
+
 ## Install the CLI
 
 Install `metrics-adjuster` into a Python environment available on your PATH:

@@ -99,6 +99,36 @@ class ReportLabelConfig(BaseModel):
   metrics: dict[str, str] = Field(default_factory=dict)
 
 
+class DecisionCurvePlotConfig(BaseModel):
+  """Enablement controls for decision-curve report plot variants."""
+
+  model_config = ConfigDict(frozen=True)
+
+  standard_subgroup: bool = True
+  comparative_model_utility: bool = True
+
+
+class DecisionCurveConfig(BaseModel):
+  """Configuration for decision curve analysis in reports."""
+
+  model_config = ConfigDict(frozen=True)
+
+  enabled: bool = True
+  threshold_min: float = Field(default=0.01, gt=0.0, lt=1.0)
+  threshold_max: float = Field(default=0.99, gt=0.0, lt=1.0)
+  threshold_points: int = Field(default=99, ge=2)
+  facet_max_rows: int | None = Field(default=None, ge=1)
+  facet_max_cols: int | None = Field(default=3, ge=1)
+  write_csv_artifact: bool = True
+  plots: DecisionCurvePlotConfig = DecisionCurvePlotConfig()
+
+  @model_validator(mode="after")
+  def validate_threshold_range(self) -> DecisionCurveConfig:
+    if self.threshold_min >= self.threshold_max:
+      raise ValueError("threshold_min must be less than threshold_max")
+    return self
+
+
 class ReportConfig(BaseModel):
   """Configuration for human-readable report rendering."""
 
@@ -110,6 +140,7 @@ class ReportConfig(BaseModel):
   labels: ReportLabelConfig = ReportLabelConfig()
   max_cutoff_lines: int = Field(default=8, ge=0)
   density_points: int = Field(default=200, ge=20)
+  decision_curve: DecisionCurveConfig = DecisionCurveConfig()
 
 
 class MetricConfig(BaseModel):
@@ -123,6 +154,7 @@ class MetricConfig(BaseModel):
   thresholds: tuple[float, ...] = ()
   metrics: tuple[MetricName, ...] = DEFAULT_METRICS
   pairwise: bool = False
+  include_calibrated_metrics: bool = False
   calibration: CalibrationConfig = CalibrationConfig()
   density_ratio: DensityRatioConfig = DensityRatioConfig()
   bootstrap: BootstrapConfig = BootstrapConfig()

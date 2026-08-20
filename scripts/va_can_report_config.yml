@@ -1,6 +1,15 @@
 title: VA CAN 2019 adjusted metrics report
 subtitle: Sampled evaluation on 50,000 rows from all_can_2019_v2_ordinalver.parquet
 x_scale: log_odds
+decision_curve:
+  enabled: true
+  threshold_min: 0.01
+  threshold_max: 0.30
+  threshold_points: 60
+  facet_max_cols: 3
+  plots:
+    standard_subgroup: true
+    comparative_model_utility: true
 labels:
   columns:
     Prior1245: Veteran Priority Group

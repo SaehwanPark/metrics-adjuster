@@ -52,6 +52,7 @@ Arguments:
 | `--n` | no | `600` | Number of synthetic rows to generate. |
 | `--seed` | no | `2026` | Random seed for reproducibility. |
 | `--metrics` | no | `aTPR` | Comma-separated adjusted metrics to compute. |
+| `--include-calibrated-metrics` | no | disabled | Include calibrated-unweighted `c*` metric columns and report curves. |
 | `--report` | no | disabled | Write `report.html` with report tables and plots. |
 | `--report-title` | no | `Synthetic Adjusted Metrics Report` | HTML report title. |
 | `--report-max-cutoff-lines` | no | `8` | Maximum cutoff reference lines per plot. |
@@ -69,6 +70,8 @@ demo_outputs/
 ├── weights.parquet          # with --save-artifacts
 ├── figure_1_calibrated_density.svg  # with --report --report-figures
 ├── figure_2_weight_ratio.svg        # with --report --report-figures
+├── figure_3_standard_subgroup_dca.svg       # with --report --report-figures
+├── figure_4_comparative_model_utility.svg   # with --report --report-figures
 └── report.html              # with --report
 ```
 
@@ -116,6 +119,7 @@ uv run metrics-adjuster run \
 | `--thresholds` | omitted | Comma-separated fixed risk thresholds evaluated in addition to quantiles. |
 | `--metrics` | `aTPR` | Comma-separated adjusted metrics to compute. |
 | `--pairwise-deltas` | disabled | Write `pairwise.csv` with reference-vs-comparison deltas. |
+| `--include-calibrated-metrics` | disabled | Include calibrated-unweighted `c*` metric columns and report curves. |
 | `--cal-degree` | `2` | Polynomial degree for calibration. |
 | `--dr-degree` | `1` | Polynomial degree for density-ratio estimation. |
 | `--cv` | disabled | Use group-wise cross-fitting for calibration and density-ratio models. |
@@ -125,7 +129,7 @@ uv run metrics-adjuster run \
 | `--report` | disabled | Write a self-contained HTML report to the output directory. |
 | `--report-title` | `Adjusted Metrics Report` | HTML report title. |
 | `--report-max-cutoff-lines` | `8` | Maximum cutoff reference lines per plot. |
-| `--report-config-yaml` | omitted | YAML file for report title, labels, and plot x-axis scale. |
+| `--report-config-yaml` | omitted | YAML file for report title, labels, plot x-axis scale, DCA thresholds, plot selection, and DCA facet layout. |
 | `--report-figures` | disabled | Write standalone figure files (requires `--report`). |
 | `--report-figure-format` | `svg` | Figure format for `--report-figures` (`svg` or `png`). |
 | `--save-artifacts` | disabled | Write `calibration.parquet` and `weights.parquet`. |
@@ -160,6 +164,9 @@ The CLI writes one CSV per requested adjusted metric. The file name is the adjus
 | `aHR.csv` | group column, `quantile`, `tau`, `HR`, `aHR` |
 
 The group column keeps the same name that you pass to `--group-col`.
+Add `--include-calibrated-metrics` to insert calibrated-unweighted `c*`
+columns between the conventional and adjusted columns, for example
+`TPR`, `cTPR`, `aTPR`.
 
 For fixed-threshold Xiaoyi-style alignment runs, pass an empty quantile list and
 one or more thresholds:
@@ -181,6 +188,8 @@ uv run metrics-adjuster run \
 When `--pairwise-deltas` is used, `pairwise.csv` contains `metric`, the group
 column, `reference_group`, `quantile`, `tau`, `reference_value`,
 `comparison_value`, `adjusted_comparison_value`, `delta`, and `adjusted_delta`.
+With `--include-calibrated-metrics`, it also contains
+`calibrated_comparison_value` and `calibrated_delta`.
 
 When `--bootstrap` is enabled, metric CSVs also include adjusted-metric bootstrap summary columns:
 
@@ -197,15 +206,34 @@ bootstrap.csv
 When `--report` is used, the CLI also writes `report.html`. The report contains:
 
 - Table 1 with compact per-metric subtables of group, threshold, original value,
-  and adjusted value with interval when bootstrap is enabled.
+  optional calibrated value, and adjusted value with interval when bootstrap is
+  enabled.
 - Calibrated probability density plots for the reference and comparison groups.
 - Density plots normalized to the reference-group density.
+- Decision curves by subgroup with original/optional calibrated/adjusted net
+  benefit, subgroup treat-all, and treat-none baselines.
+- Model net benefit by subgroup with subgroup model curves overlaid and compared
+  separately for original, optional calibrated, and adjusted net benefit.
+- Shared DCA table CSV for downstream analysis: `decision_curve_table.csv`.
+
+Report DCA thresholds are threshold probabilities, not prevalence values. All
+model DCA families use `risk > threshold` as the decision rule. Prevalence is
+used only for treat-all reference curves. Adjusted treat-all uses the observed
+reference-group prevalence for every subgroup. With
+`--include-calibrated-metrics`, DCA decomposes net benefit into observed
+subgroup utility (`NB`), calibrated-unweighted subgroup utility (`cNB`), and
+reference-standardized adjusted utility (`aNB`).
+For the statistical definitions, see
+[Decision Curve Analysis Definitions](adjusted-dca.md) and
+[Adjusted Net Benefit: Derivation and Estimation](adjusted-net-benefit.md).
 
 When `--report-figures` is also used, standalone files are written:
 
 ```text
 figure_1_calibrated_density.svg
 figure_2_weight_ratio.svg
+figure_3_standard_subgroup_dca.svg
+figure_4_comparative_model_utility.svg
 ```
 
 When `--save-artifacts` is used, row-level parquet artifacts are written:
@@ -215,6 +243,10 @@ When `--save-artifacts` is used, row-level parquet artifacts are written:
 | `calibration.parquet` | `cal_risk` plus `id` when `--id-col` is set |
 | `weights.parquet` | `dens_ratio` plus `id` when `--id-col` is set |
 
+When report DCA is enabled, the CLI writes `decision_curve_table.csv` by
+default. Disable it in report YAML with
+`decision_curve.write_csv_artifact: false`.
+
 Confidence interval fields use bootstrap summaries when `--bootstrap` is also
 enabled. Without bootstrap, those fields are shown as unavailable.
 
@@ -223,6 +255,16 @@ Use `--report-config-yaml` to customize display labels and plot scale:
 ```yaml
 title: Adjusted metric report
 x_scale: log_odds  # probability | log_odds
+decision_curve:
+  enabled: true
+  threshold_min: 0.01
+  threshold_max: 0.30
+  threshold_points: 60
+  facet_max_cols: 3
+  write_csv_artifact: true
+  plots:
+    standard_subgroup: true
+    comparative_model_utility: true
 labels:
   columns:
     Prior1245: Veteran Priority Group
@@ -245,6 +287,9 @@ labels:
 ```
 
 The conventional companions are automatically included in each output. You do not need to request `TPR`, `PPV`, `NB`, or `HR` separately.
+Calibrated companions are optional; request them with
+`--include-calibrated-metrics` when you want to separate calibration effects
+from density-ratio weighting effects.
 
 ## Examples
 

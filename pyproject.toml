@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "metrics-adjuster"
-version = "1.1.0"
+version = "1.1.1"
 description = "Adjusted group-aware clinical prediction metrics with Python API and CLI."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,6 +29,7 @@ dependencies = [
   "pandas>=2.1",
   "pyarrow>=24.0.0",
   "pydantic>=2.6",
+  "python-dotenv>=1.2.2",
   "pyyaml>=6.0.3",
 ]
 
@@ -61,6 +62,7 @@ include = [
   "QUICKSTART.md",
   "docs/API_MANUAL.md",
   "docs/CLI_MANUAL.md",
+  "docs/R_CLI_GUIDE.md",
   "LICENSE",
   "CHANGELOG.md",
   "pyproject.toml",
@@ -72,6 +74,7 @@ exclude = [
   "docs/artifacts/**",
   "legacy/**",
   "results/**",
+  "collaboration/**",
   "tests/deployment/**",
   "**/__pycache__/**",
   "*.pyc",

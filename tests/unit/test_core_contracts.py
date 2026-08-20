@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from metrics_adjuster import (
+  BootstrapConfig,
   CalibrationConfig,
   ColumnSpec,
   DensityRatioConfig,
@@ -17,9 +18,11 @@ from metrics_adjuster import (
   compute_adjusted_metrics,
 )
 from metrics_adjuster.core import (
+  calibrated_metric_name,
   compute_logit,
   high_risk_indicator,
   metric_frame_at_threshold,
+  plug_in_adjusted_net_benefit,
   resolve_quantile_mask,
   safe_divide,
 )
@@ -77,6 +80,86 @@ def test_metric_frame_at_threshold_matches_hand_calculated_atpr() -> None:
   assert alt_traditional == pytest.approx(0.0)
   assert ref_value == pytest.approx(0.7 / (0.2 + 0.7))
   assert alt_value == pytest.approx((0.6 * 2.0) / ((0.5 * 2.0) + (0.6 * 2.0)))
+
+
+@pytest.mark.parametrize(
+  ("metric", "calibrated_name", "ref_calibrated", "alt_calibrated"),
+  [
+    (MetricName.ATPR, "cTPR", 0.7 / 0.9, 0.6 / 1.1),
+    (MetricName.APPV, "cPPV", 0.7, 0.6),
+    (MetricName.ANB, "cNB", 0.35 - 0.15, 0.3 - 0.2),
+    (MetricName.AHR, "cHR", 0.5, 0.5),
+  ],
+)
+def test_metric_frame_can_include_calibrated_unweighted_values(
+  metric: MetricName,
+  calibrated_name: str,
+  ref_calibrated: float,
+  alt_calibrated: float,
+) -> None:
+  result = metric_frame_at_threshold(
+    small_metric_frame(),
+    group_col="group",
+    risk_col="risk",
+    response_col="outcome",
+    metric=metric,
+    quantile=float("nan"),
+    tau=0.5,
+    include_calibrated_metrics=True,
+    ref_group="ref",
+  )
+  ref_row = result[result["group"] == "ref"].iloc[0]
+  alt_row = result[result["group"] == "alt"].iloc[0]
+
+  assert calibrated_metric_name(metric) == calibrated_name
+  assert calibrated_name in result.columns
+  assert ref_row[calibrated_name] == pytest.approx(ref_calibrated)
+  assert alt_row[calibrated_name] == pytest.approx(alt_calibrated)
+
+
+def test_plug_in_adjusted_net_benefit_matches_atpr_afpr_identity() -> None:
+  tau = 0.5
+  mu0 = 0.5
+  atpr = 0.6 / 1.1
+  afpr = 0.8 / 1.8
+  expected = atpr * mu0 - afpr * (1.0 - mu0) * tau / (1.0 - tau)
+  assert plug_in_adjusted_net_benefit(atpr, afpr, mu0, tau) == pytest.approx(expected)
+
+
+def test_metric_frame_anb_uses_atpr_afpr_and_reference_prevalence() -> None:
+  result = metric_frame_at_threshold(
+    small_metric_frame(),
+    group_col="group",
+    risk_col="risk",
+    response_col="outcome",
+    metric=MetricName.ANB,
+    quantile=float("nan"),
+    tau=0.5,
+    ref_group="ref",
+  )
+  alt_row = result[result["group"] == "alt"].iloc[0]
+  atpr = 0.6 / 1.1
+  afpr = 0.8 / 1.8
+  mu0 = 0.5
+  expected = plug_in_adjusted_net_benefit(atpr, afpr, mu0, 0.5)
+  old_weighted_mean_estimator = 0.1
+
+  assert alt_row["NB"] == pytest.approx(-0.5)
+  assert alt_row["aNB"] == pytest.approx(expected)
+  assert alt_row["aNB"] != pytest.approx(old_weighted_mean_estimator)
+
+
+def test_metric_frame_anb_requires_reference_group() -> None:
+  with pytest.raises(ValueError, match="ref_group is required for aNB"):
+    metric_frame_at_threshold(
+      small_metric_frame(),
+      group_col="group",
+      risk_col="risk",
+      response_col="outcome",
+      metric=MetricName.ANB,
+      quantile=float("nan"),
+      tau=0.5,
+    )
 
 
 @pytest.mark.parametrize(
@@ -139,6 +222,26 @@ def test_typed_api_returns_all_requested_metric_frames() -> None:
   assert result.metrics["aHR"]["aHR"].between(0, 1).all()
 
 
+def test_typed_api_includes_calibrated_columns_only_when_requested() -> None:
+  df = generate_synthetic_metrics_data(n=120, seed=31)
+  default_config = MetricConfig(
+    columns=ColumnSpec(group="group", response="outcome", risk="risk", id="patient_id"),
+    ref_group="ref",
+    quantiles=(0.5,),
+    metrics=(MetricName.ATPR,),
+    calibration=CalibrationConfig(degree=1, cv=False),
+    density_ratio=DensityRatioConfig(degree=1, cv=False),
+    random_state=31,
+  )
+  calibrated_config = default_config.model_copy(update={"include_calibrated_metrics": True})
+
+  default = adjusted_metrics(df, default_config).metrics["aTPR"]
+  calibrated = adjusted_metrics(df, calibrated_config).metrics["aTPR"]
+
+  assert set(default.columns) == {"group", "quantile", "tau", "TPR", "aTPR"}
+  assert set(calibrated.columns) == {"group", "quantile", "tau", "TPR", "cTPR", "aTPR"}
+
+
 def test_fixed_thresholds_are_appended_without_changing_quantile_rows() -> None:
   df = generate_synthetic_metrics_data(n=120, seed=11)
   config = MetricConfig(
@@ -185,6 +288,29 @@ def test_pairwise_delta_frame_is_optional_and_arithmetic_is_stable() -> None:
   assert first["adjusted_delta"] == pytest.approx(
     first["adjusted_comparison_value"] - first["reference_value"]
   )
+
+
+def test_pairwise_and_bootstrap_include_calibrated_values_when_requested() -> None:
+  df = generate_synthetic_metrics_data(n=120, seed=32)
+  config = MetricConfig(
+    columns=ColumnSpec(group="group", response="outcome", risk="risk", id="patient_id"),
+    ref_group="ref",
+    quantiles=(0.5,),
+    metrics=(MetricName.ATPR,),
+    pairwise=True,
+    include_calibrated_metrics=True,
+    calibration=CalibrationConfig(degree=1, cv=False),
+    density_ratio=DensityRatioConfig(degree=1, cv=False),
+    bootstrap=BootstrapConfig(enabled=True, iterations=3),
+    random_state=32,
+  )
+
+  result = adjusted_metrics(df, config)
+
+  assert result.pairwise is not None
+  assert {"calibrated_comparison_value", "calibrated_delta"}.issubset(result.pairwise.columns)
+  assert result.bootstrap is not None
+  assert "calibrated_value" in result.bootstrap.columns
 
 
 def test_legacy_api_wrapper_preserves_result_shape() -> None:

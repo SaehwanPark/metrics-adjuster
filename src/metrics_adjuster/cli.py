@@ -10,7 +10,12 @@ import pandas as pd
 import yaml
 
 from metrics_adjuster.api import adjusted_metrics, adjusted_metrics_report
-from metrics_adjuster.reporting import ReportBundle, write_report_figures
+from metrics_adjuster.reporting import (
+  ReportBundle,
+  write_decision_curve_csv,
+  write_decision_curve_figures,
+  write_report_figures,
+)
 from metrics_adjuster.synthetic import generate_synthetic_metrics_data
 from metrics_adjuster.types import (
   BootstrapConfig,
@@ -137,6 +142,7 @@ def build_run_config(
     thresholds=parse_thresholds(args.thresholds),
     metrics=parse_metrics(args.metrics),
     pairwise=args.pairwise_deltas,
+    include_calibrated_metrics=args.include_calibrated_metrics,
     calibration=CalibrationConfig(degree=args.cal_degree, cv=args.cv),
     density_ratio=DensityRatioConfig(degree=args.dr_degree, cv=args.cv),
     bootstrap=BootstrapConfig(enabled=args.bootstrap, iterations=args.n_boot),
@@ -155,6 +161,7 @@ def write_report_bundle_outputs(
   bundle: ReportBundle,
   output_dir: Path,
   *,
+  report_config: ReportConfig,
   report_figures: bool,
   report_figure_format: Literal["svg", "png"],
 ) -> None:
@@ -166,6 +173,16 @@ def write_report_bundle_outputs(
       output_dir,
       figure_format=report_figure_format,
     )
+    write_decision_curve_figures(
+      bundle,
+      output_dir,
+      figure_format=report_figure_format,
+    )
+  if (
+    report_config.decision_curve.write_csv_artifact
+    and bundle.decision_curve_table is not None
+  ):
+    write_decision_curve_csv(bundle, output_dir)
 
 
 def add_report_arguments(
@@ -229,6 +246,11 @@ def build_parser() -> argparse.ArgumentParser:
     action="store_true",
     help="write pairwise.csv with reference-vs-comparison deltas",
   )
+  run.add_argument(
+    "--include-calibrated-metrics",
+    action="store_true",
+    help="include calibrated-unweighted c* metric columns and report curves",
+  )
   run.add_argument("--cal-degree", type=int, default=2)
   run.add_argument("--dr-degree", type=int, default=1)
   run.add_argument("--cv", action="store_true")
@@ -243,6 +265,11 @@ def build_parser() -> argparse.ArgumentParser:
   demo.add_argument("--n", type=int, default=600)
   demo.add_argument("--seed", type=int, default=2026)
   demo.add_argument("--metrics", default="aTPR")
+  demo.add_argument(
+    "--include-calibrated-metrics",
+    action="store_true",
+    help="include calibrated-unweighted c* metric columns and report curves",
+  )
   add_report_arguments(demo, default_report_title="Synthetic Adjusted Metrics Report")
   add_artifact_arguments(demo)
 
@@ -266,15 +293,17 @@ def run_command(args: argparse.Namespace) -> None:
   df = read_table(args.input, columns)
   config = build_run_config(args, df, args.output_dir)
   if args.report:
+    report_config = build_report_config(args)
     bundle = adjusted_metrics_report(
       df,
       config,
-      build_report_config(args),
+      report_config,
     )
     result = bundle.metrics
     write_report_bundle_outputs(
       bundle,
       args.output_dir,
+      report_config=report_config,
       report_figures=args.report_figures,
       report_figure_format=args.report_figure_format,
     )
@@ -299,21 +328,24 @@ def demo_command(args: argparse.Namespace) -> None:
     ref_group="ref",
     quantiles=(0.2, 0.4, 0.6, 0.8),
     metrics=parse_metrics(args.metrics),
+    include_calibrated_metrics=args.include_calibrated_metrics,
     calibration=CalibrationConfig(degree=2, cv=False),
     density_ratio=DensityRatioConfig(degree=1, cv=False),
     output=build_output_config(args, args.output_dir),
     random_state=args.seed,
   )
   if args.report:
+    report_config = build_report_config(args)
     bundle = adjusted_metrics_report(
       data,
       config,
-      build_report_config(args),
+      report_config,
     )
     result = bundle.metrics
     write_report_bundle_outputs(
       bundle,
       args.output_dir,
+      report_config=report_config,
       report_figures=args.report_figures,
       report_figure_format=args.report_figure_format,
     )

@@ -76,6 +76,7 @@ def compute_adjusted_metrics(
   se_boot: bool = False,
   n_boot: int = 500,
   alpha: float = 0.05,
+  include_calibrated_metrics: bool = False,
   random_state: int | None = None,
 ) -> dict[str, Any]:
   """Backward-compatible wrapper around the typed API."""
@@ -86,6 +87,7 @@ def compute_adjusted_metrics(
     thresholds=tuple(thresholds or ()),
     metrics=tuple(MetricName(metric) for metric in metrics) if metrics else DEFAULT_METRICS,
     pairwise=pairwise,
+    include_calibrated_metrics=include_calibrated_metrics,
     calibration=CalibrationConfig(degree=cal_degree, transform=transform_cal, cv=cv),
     density_ratio=DensityRatioConfig(degree=dr_degree, transform=transform_dr, cv=cv),
     bootstrap=BootstrapConfig(enabled=se_boot, iterations=n_boot, alpha=alpha),

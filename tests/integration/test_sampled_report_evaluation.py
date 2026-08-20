@@ -372,6 +372,7 @@ labels:
     "aNB.csv",
     "aHR.csv",
     "bootstrap.csv",
+    "decision_curve_table.csv",
     "report.html",
   }.issubset(written)
   html = (report_dir / "report.html").read_text(encoding="utf-8")

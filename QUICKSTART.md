@@ -37,6 +37,7 @@ demo_outputs/calibration.parquet
 demo_outputs/weights.parquet
 demo_outputs/figure_1_calibrated_density.svg
 demo_outputs/figure_2_weight_ratio.svg
+demo_outputs/figure_3_decision_curve.svg
 ```
 
 Use `--report-figure-format png` when PNG files are preferred.

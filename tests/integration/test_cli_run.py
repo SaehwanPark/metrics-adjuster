@@ -53,6 +53,7 @@ def test_cli_run_report_defaults_to_atpr_metric_from_parquet(
   assert not (tmp_path / "aNB.csv").exists()
   assert not (tmp_path / "aHR.csv").exists()
   assert (tmp_path / "report.html").exists()
+  assert (tmp_path / "decision_curve_table.csv").exists()
 
 
 def test_cli_run_accepts_numeric_reference_group_from_parquet(
@@ -138,6 +139,59 @@ labels:
   assert "Reference group" in report
   assert "True positive rate" in report
   assert "Table 1. Metric Estimates" in report
+
+
+def test_cli_run_can_include_calibrated_metric_family(
+  tmp_path,
+  monkeypatch,
+) -> None:
+  input_path = tmp_path / "input.parquet"
+  df = pd.DataFrame(
+    {
+      "Prior1245": [99, 99, 1, 1, 2, 2] * 6,
+      "Hosp_1y": [1, 0, 1, 0, 1, 0] * 6,
+      "pHosp_1y": [0.92, 0.21, 0.81, 0.32, 0.71, 0.11] * 6,
+    }
+  )
+  df.to_parquet(input_path, index=False)
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "metrics-adjuster",
+      "run",
+      "--input",
+      str(input_path),
+      "--output-dir",
+      str(tmp_path),
+      "--group-col",
+      "Prior1245",
+      "--ref-group",
+      "99",
+      "--response-col",
+      "Hosp_1y",
+      "--risk-col",
+      "pHosp_1y",
+      "--quantiles",
+      "0.5",
+      "--metrics",
+      "aTPR",
+      "--include-calibrated-metrics",
+      "--report",
+    ],
+  )
+
+  main()
+
+  atpr = pd.read_csv(tmp_path / "aTPR.csv")
+  dca = pd.read_csv(tmp_path / "decision_curve_table.csv")
+  report = (tmp_path / "report.html").read_text(encoding="utf-8")
+  assert {"Prior1245", "quantile", "tau", "TPR", "cTPR", "aTPR"}.issubset(
+    atpr.columns
+  )
+  assert "calibrated" in set(dca["curve_family"])
+  assert "Calibrated" in report
 
 
 def test_cli_run_save_artifacts_writes_parquet(tmp_path, monkeypatch) -> None:
@@ -273,3 +327,55 @@ def test_cli_run_report_figures_requires_report(tmp_path, monkeypatch) -> None:
   )
   with pytest.raises(SystemExit, match="--report-figures requires --report"):
     main()
+
+
+def test_cli_run_can_disable_dca_csv_artifact_via_yaml(tmp_path, monkeypatch) -> None:
+  input_path = tmp_path / "input.parquet"
+  report_yaml = tmp_path / "report.yml"
+  df = pd.DataFrame(
+    {
+      "group": ["ref", "ref", "alt", "alt"] * 4,
+      "outcome": [1, 0, 1, 0] * 4,
+      "risk": [0.8, 0.2, 0.7, 0.1] * 4,
+    }
+  )
+  df.to_parquet(input_path, index=False)
+  report_yaml.write_text(
+    "\n".join(
+      [
+        "decision_curve:",
+        "  write_csv_artifact: false",
+      ]
+    ),
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    [
+      "metrics-adjuster",
+      "run",
+      "--input",
+      str(input_path),
+      "--output-dir",
+      str(tmp_path / "outputs"),
+      "--group-col",
+      "group",
+      "--ref-group",
+      "ref",
+      "--response-col",
+      "outcome",
+      "--risk-col",
+      "risk",
+      "--quantiles",
+      "0.5",
+      "--report",
+      "--report-config-yaml",
+      str(report_yaml),
+    ],
+  )
+
+  main()
+
+  assert (tmp_path / "outputs" / "report.html").exists()
+  assert not (tmp_path / "outputs" / "decision_curve_table.csv").exists()
