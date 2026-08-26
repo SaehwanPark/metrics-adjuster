@@ -62,7 +62,7 @@ Parquet input and artifact output work out of the box (`pyarrow` is included).
 - CLI only, without a project environment: `pipx install metrics-adjuster`
 - uv project: `uv add metrics-adjuster`
 - conda or mamba env: run the pip command above inside your activated environment
-- pinned release: `python -m pip install "metrics-adjuster==1.1.1"`
+- pinned release: `python -m pip install "metrics-adjuster==1.1.2"`
 - source checkout: see [Contributing](CONTRIBUTING.md)
 
 ## Quick Example
@@ -147,11 +147,11 @@ separately as:
 
 APA:
 
-Park, S. (2026). _metrics-adjuster_ (Version 1.1.1) [Computer software]. GitHub. https://github.com/SaehwanPark/metrics-adjuster
+Park, S. (2026). _metrics-adjuster_ (Version 1.1.2) [Computer software]. GitHub. https://github.com/SaehwanPark/metrics-adjuster
 
 AMA:
 
-Park S. metrics-adjuster [computer program]. Version 1.1.1. Published 2026. Accessed August 20, 2026. https://github.com/SaehwanPark/metrics-adjuster
+Park S. metrics-adjuster [computer program]. Version 1.1.2. Published 2026. Accessed August 20, 2026. https://github.com/SaehwanPark/metrics-adjuster
 
 ## License
 

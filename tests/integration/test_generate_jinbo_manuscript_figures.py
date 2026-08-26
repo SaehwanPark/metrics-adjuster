@@ -11,9 +11,7 @@ import pytest
 
 
 def load_figure_script() -> ModuleType:
-  script_path = (
-    Path(__file__).parents[2] / "scripts" / "generate_jinbo_manuscript_figures.py"
-  )
+  script_path = Path(__file__).parents[2] / "scripts" / "generate_jinbo_manuscript_figures.py"
   spec = importlib.util.spec_from_file_location(
     "generate_jinbo_manuscript_figures",
     script_path,

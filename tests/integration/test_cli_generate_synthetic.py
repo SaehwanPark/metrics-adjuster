@@ -27,11 +27,15 @@ def test_cli_generate_synthetic_writes_csv_and_parquet(tmp_path, monkeypatch) ->
   main()
 
   csv_path = output_dir / "synthetic_metrics_data.csv"
+  canonical_csv_path = output_dir / "metrics-adjuster-synthetic-data.csv"
   parquet_path = output_dir / "sample.parquet"
   assert csv_path.exists()
+  assert canonical_csv_path.exists()
   assert parquet_path.exists()
   csv_frame = pd.read_csv(csv_path)
+  canonical_frame = pd.read_csv(canonical_csv_path)
   parquet_frame = pd.read_parquet(parquet_path)
+  pd.testing.assert_frame_equal(csv_frame, canonical_frame)
   assert set(csv_frame.columns) == {
     "patient_id",
     "group",

@@ -64,6 +64,7 @@ Outputs:
 
 ```text
 demo_outputs/
+├── metrics-adjuster-synthetic-data.csv
 ├── synthetic_metrics_data.csv
 ├── aTPR.csv
 ├── calibration.parquet      # with --save-artifacts
@@ -388,6 +389,7 @@ Outputs:
 
 ```text
 data/generated/synthetic-metrics-demo/
+├── metrics-adjuster-synthetic-data.csv
 ├── synthetic_metrics_data.csv
 └── sample.parquet
 ```

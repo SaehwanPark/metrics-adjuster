@@ -174,7 +174,7 @@ def assign_group_folds(
 def polynomial_matrix(x: FloatArray, degree: int) -> FloatArray:
   """Create a simple polynomial design matrix without an intercept column."""
   flat = x.astype(float).reshape(-1)
-  return np.column_stack([flat ** power for power in range(1, degree + 1)]).astype(float)
+  return np.column_stack([flat**power for power in range(1, degree + 1)]).astype(float)
 
 
 def sigmoid(values: FloatArray) -> FloatArray:

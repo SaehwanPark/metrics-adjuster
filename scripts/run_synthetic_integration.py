@@ -35,6 +35,7 @@ def main() -> None:
   args.output_dir.mkdir(parents=True, exist_ok=True)
 
   data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
+  data.to_csv(args.output_dir / "metrics-adjuster-synthetic-data.csv", index=False)
   data.to_csv(args.output_dir / "synthetic_metrics_data.csv", index=False)
 
   config = MetricConfig(

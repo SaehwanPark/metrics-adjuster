@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.1.2] - 2026-08-26
+
+### Added
+
+- Added canonical reproducible synthetic example dataset at `data/generated/metrics-adjuster-synthetic-data.csv`.
+- Added support for generating and consuming `metrics-adjuster-synthetic-data.csv` in CLI synthetic workflows and demonstrations.
+
 ## [1.1.1] - 2026-08-20
 
 ### Added

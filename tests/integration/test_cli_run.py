@@ -187,9 +187,7 @@ def test_cli_run_can_include_calibrated_metric_family(
   atpr = pd.read_csv(tmp_path / "aTPR.csv")
   dca = pd.read_csv(tmp_path / "decision_curve_table.csv")
   report = (tmp_path / "report.html").read_text(encoding="utf-8")
-  assert {"Prior1245", "quantile", "tau", "TPR", "cTPR", "aTPR"}.issubset(
-    atpr.columns
-  )
+  assert {"Prior1245", "quantile", "tau", "TPR", "cTPR", "aTPR"}.issubset(atpr.columns)
   assert "calibrated" in set(dca["curve_family"])
   assert "Calibrated" in report
 

@@ -106,6 +106,7 @@ Row-level data is gitignored under `data/generated/`.
 ## Files
 
 - `{sample_path.name}`: parquet input for `metrics-adjuster run`
+- `metrics-adjuster-synthetic-data.csv`: canonical synthetic dataset
 - `{csv_path.name}`: CSV copy of the same synthetic frame
 
 ## Example commands
@@ -133,6 +134,7 @@ def main() -> None:
   output_dir = args.output_dir
   output_dir.mkdir(parents=True, exist_ok=True)
   data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
+  data.to_csv(output_dir / "metrics-adjuster-synthetic-data.csv", index=False)
   data.to_csv(output_dir / "synthetic_metrics_data.csv", index=False)
   data.to_parquet(output_dir / DEFAULT_SAMPLE_FILENAME, index=False)
   (output_dir / "README.md").write_text(render_readme(args, output_dir), encoding="utf-8")

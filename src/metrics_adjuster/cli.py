@@ -179,8 +179,7 @@ def write_report_bundle_outputs(
       figure_format=report_figure_format,
     )
   if (
-    report_config.decision_curve.write_csv_artifact
-    and bundle.decision_curve_table is not None
+    report_config.decision_curve.write_csv_artifact and bundle.decision_curve_table is not None
   ):
     write_decision_curve_csv(bundle, output_dir)
 
@@ -323,6 +322,7 @@ def demo_command(args: argparse.Namespace) -> None:
   data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
   data_path = args.output_dir / "synthetic_metrics_data.csv"
   data.to_csv(data_path, index=False)
+  data.to_csv(args.output_dir / "metrics-adjuster-synthetic-data.csv", index=False)
   config = MetricConfig(
     columns=ColumnSpec(group="group", response="outcome", risk="risk", id="patient_id"),
     ref_group="ref",
@@ -362,6 +362,7 @@ def generate_synthetic_command(args: argparse.Namespace) -> None:
     raise SystemExit("--n must be greater than 0")
   args.output_dir.mkdir(parents=True, exist_ok=True)
   data = generate_synthetic_metrics_data(n=args.n, seed=args.seed)
+  data.to_csv(args.output_dir / "metrics-adjuster-synthetic-data.csv", index=False)
   data.to_csv(args.output_dir / "synthetic_metrics_data.csv", index=False)
   data.to_parquet(args.output_dir / "sample.parquet", index=False)
   print(f"Wrote synthetic data to {args.output_dir}")

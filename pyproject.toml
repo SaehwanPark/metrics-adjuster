@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "metrics-adjuster"
-version = "1.1.1"
+version = "1.1.2"
 description = "Adjusted group-aware clinical prediction metrics with Python API and CLI."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -58,6 +58,7 @@ include = [
   "src/metrics_adjuster/**",
   "tests/**",
   "scripts/**",
+  "data/generated/metrics-adjuster-synthetic-data.csv",
   "README.md",
   "QUICKSTART.md",
   "docs/API_MANUAL.md",

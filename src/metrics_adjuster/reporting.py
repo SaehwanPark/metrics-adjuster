@@ -258,8 +258,7 @@ def transformed_cutoffs(
   thresholds = np.asarray([tau for _, tau in cutoffs], dtype=float)
   transformed = compute_logit(thresholds)
   return tuple(
-    (float(quantile), float(tau))
-    for quantile, tau in zip(quantiles, transformed, strict=True)
+    (float(quantile), float(tau)) for quantile, tau in zip(quantiles, transformed, strict=True)
   )
 
 
@@ -683,7 +682,7 @@ def decision_curve_standard_subgroup_figure(
     ax.set_xlim(*x_limits)
     ax.set_xlabel(xlabel)
     ax.grid(alpha=0.18)
-  for ax in axes[len(groups):]:
+  for ax in axes[len(groups) :]:
     ax.set_visible(False)
   if len(groups) > 0:
     axes[0].set_ylabel("Net benefit")
@@ -947,24 +946,29 @@ def render_report_html(
   resolved_config = report_config or ReportConfig()
   include_calibrated = "calibrated_value" in metric_table.columns
   group_col = next(
-    (column for column in metric_table.columns if column not in {
-      "metric",
-      "quantile",
-      "tau",
-      "original_metric",
-      "original_value",
-      "original_ci_lower",
-      "original_ci_upper",
-      "calibrated_metric",
-      "calibrated_value",
-      "calibrated_ci_lower",
-      "calibrated_ci_upper",
-      "adjusted_metric",
-      "adjusted_value",
-      "adjusted_ci_lower",
-      "adjusted_ci_upper",
-      "n_boot",
-    }),
+    (
+      column
+      for column in metric_table.columns
+      if column
+      not in {
+        "metric",
+        "quantile",
+        "tau",
+        "original_metric",
+        "original_value",
+        "original_ci_lower",
+        "original_ci_upper",
+        "calibrated_metric",
+        "calibrated_value",
+        "calibrated_ci_lower",
+        "calibrated_ci_upper",
+        "adjusted_metric",
+        "adjusted_value",
+        "adjusted_ci_lower",
+        "adjusted_ci_upper",
+        "n_boot",
+      }
+    ),
     "group",
   )
   table_html = compact_metric_table_html(metric_table, group_col, resolved_config)
@@ -988,7 +992,7 @@ def render_report_html(
   )
   summary_html = "".join(
     (
-      f"<div class=\"summary-card\"><span>{html.escape(label)}</span>"
+      f'<div class="summary-card"><span>{html.escape(label)}</span>'
       f"<strong>{html.escape(value)}</strong></div>"
     )
     for label, value in summary_items

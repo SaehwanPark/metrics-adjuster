@@ -26,6 +26,7 @@ def test_cli_demo_defaults_to_atpr_metric_file(tmp_path, monkeypatch) -> None:
   main()
   expected = [
     "synthetic_metrics_data.csv",
+    "metrics-adjuster-synthetic-data.csv",
     "aTPR.csv",
   ]
   for filename in expected:

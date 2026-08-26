@@ -339,14 +339,10 @@ def compute_sensitivity_differences(
   group_spec: GroupSpec,
 ) -> pd.DataFrame:
   """Center conventional TPR and aTPR on their reference-group curves."""
-  working = metric_frame[
-    [group_spec.key, "quantile", "tau", "TPR", "aTPR"]
-  ].copy()
+  working = metric_frame[[group_spec.key, "quantile", "tau", "TPR", "aTPR"]].copy()
   working[group_spec.key] = working[group_spec.key].map(normalize_group_id)
   reference = (
-    working[working[group_spec.key].eq(group_spec.reference)][
-      ["quantile", "TPR", "aTPR"]
-    ]
+    working[working[group_spec.key].eq(group_spec.reference)][["quantile", "TPR", "aTPR"]]
     .rename(columns={"TPR": "TPR_reference", "aTPR": "aTPR_reference"})
     .copy()
   )
@@ -359,19 +355,23 @@ def compute_sensitivity_differences(
   result["aTPR_difference"] = result["aTPR"] - result["aTPR_reference"]
   result = result[~result[group_spec.key].eq(group_spec.reference)].copy()
   result = result.rename(columns={group_spec.key: "group"})
-  return result[
-    [
-      "group",
-      "quantile",
-      "tau",
-      "TPR",
-      "aTPR",
-      "TPR_reference",
-      "aTPR_reference",
-      "TPR_difference",
-      "aTPR_difference",
+  return (
+    result[
+      [
+        "group",
+        "quantile",
+        "tau",
+        "TPR",
+        "aTPR",
+        "TPR_reference",
+        "aTPR_reference",
+        "TPR_difference",
+        "aTPR_difference",
+      ]
     ]
-  ].sort_values(["group", "quantile"]).reset_index(drop=True)
+    .sort_values(["group", "quantile"])
+    .reset_index(drop=True)
+  )
 
 
 def analyze_panel(
@@ -519,12 +519,7 @@ def _shared_limits(panels: Sequence[PanelData]) -> tuple[float, float, float]:
   )
   density_max = max(float(panel.densities["density"].max()) for panel in panels)
   sensitivity_max = max(
-    float(
-      panel.sensitivity[["TPR_difference", "aTPR_difference"]]
-      .abs()
-      .max()
-      .max()
-    )
+    float(panel.sensitivity[["TPR_difference", "aTPR_difference"]].abs().max().max())
     for panel in panels
   )
   return (
@@ -556,9 +551,7 @@ def build_outcome_figure(
     _plot_calibration(calibration_axis, panel)
     _plot_densities(density_axis, panel)
     _plot_sensitivity(sensitivity_axis, panel)
-    for column, axis in enumerate(
-      (calibration_axis, density_axis, sensitivity_axis)
-    ):
+    for column, axis in enumerate((calibration_axis, density_axis, sensitivity_axis)):
       _style_axis(axis)
       x_position = 0.98 if column == 0 else 0.01
       horizontal_alignment = "right" if column == 0 else "left"
@@ -637,8 +630,7 @@ def build_outcome_figure(
   figure.text(
     0.5,
     0.008,
-    f"N={analyzed_rows:,} complete cases; blue=reference; "
-    "open q95 markers=aTPR.",
+    f"N={analyzed_rows:,} complete cases; blue=reference; open q95 markers=aTPR.",
     ha="center",
     va="bottom",
     fontsize=7,

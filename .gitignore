@@ -10,5 +10,8 @@ wheels/
 .venv
 
 # data and artifacts
-data/
+data/*
+!data/generated/
+data/generated/*
+!data/generated/metrics-adjuster-synthetic-data.csv
 

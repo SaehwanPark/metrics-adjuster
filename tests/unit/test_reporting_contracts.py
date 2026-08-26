@@ -481,9 +481,9 @@ def test_decision_curve_log_odds_axis_applies_to_both_dca_plots() -> None:
   assert bundle.decision_curve_standard_subgroup_figure is not None
   assert bundle.decision_curve_comparative_model_utility_figure is not None
   subgroup_xlabel = bundle.decision_curve_standard_subgroup_figure.axes[0].get_xlabel()
-  comparative_xlabel = (
-    bundle.decision_curve_comparative_model_utility_figure.axes[0].get_xlabel()
-  )
+  comparative_xlabel = bundle.decision_curve_comparative_model_utility_figure.axes[
+    0
+  ].get_xlabel()
   assert subgroup_xlabel == "Calibrated log-odds"
   assert comparative_xlabel == "Calibrated log-odds"
 
